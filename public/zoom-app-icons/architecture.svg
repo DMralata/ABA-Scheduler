@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 900" width="1400" height="900">
+  <style>
+    .title { font: bold 24px -apple-system, system-ui, sans-serif; fill: #0F172A; }
+    .group-label { font: bold 14px -apple-system, system-ui, sans-serif; fill: #475569; letter-spacing: 1px; }
+    .box-label { font: 600 14px -apple-system, system-ui, sans-serif; fill: #0F172A; }
+    .box-sub { font: 11px -apple-system, system-ui, sans-serif; fill: #64748B; }
+    .arrow-label { font: 11px -apple-system, system-ui, sans-serif; fill: #475569; }
+    .group-bg { fill: #F8FAFC; stroke: #CBD5E1; stroke-width: 1; stroke-dasharray: 4 4; }
+    .ext-bg { fill: #FEF3C7; stroke: #F59E0B; stroke-width: 1; }
+    .app-bg { fill: #DBEAFE; stroke: #3B82F6; stroke-width: 2; }
+    .db-bg { fill: #DCFCE7; stroke: #16A34A; stroke-width: 2; }
+    .user-bg { fill: #F3E8FF; stroke: #9333EA; stroke-width: 2; }
+    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; }
+    .arrow-dashed { stroke: #475569; stroke-width: 1.5; fill: none; stroke-dasharray: 4 3; }
+  </style>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <text x="700" y="40" text-anchor="middle" class="title">ABA Scheduler — Architecture &amp; Data Flow</text>
+
+  <!-- USERS -->
+  <text x="100" y="100" class="group-label">USERS</text>
+  <rect x="60" y="120" width="200" height="80" rx="10" class="user-bg"/>
+  <text x="160" y="148" text-anchor="middle" class="box-label">Admin Browser</text>
+  <text x="160" y="170" text-anchor="middle" class="box-sub">Authenticated via</text>
+  <text x="160" y="184" text-anchor="middle" class="box-sub">Supabase Auth (email/password)</text>
+
+  <rect x="60" y="220" width="200" height="80" rx="10" class="user-bg"/>
+  <text x="160" y="248" text-anchor="middle" class="box-label">Staff Zoom Client</text>
+  <text x="160" y="270" text-anchor="middle" class="box-sub">DM the ABA Scheduler bot</text>
+  <text x="160" y="284" text-anchor="middle" class="box-sub">(chat_message.sent)</text>
+
+  <!-- APPLICATION -->
+  <rect x="350" y="80" width="500" height="540" rx="12" class="group-bg"/>
+  <text x="600" y="105" text-anchor="middle" class="group-label">APPLICATION (Next.js / Node)</text>
+
+  <rect x="380" y="130" width="200" height="70" rx="8" class="app-bg"/>
+  <text x="480" y="158" text-anchor="middle" class="box-label">Middleware</text>
+  <text x="480" y="178" text-anchor="middle" class="box-sub">Supabase session check</text>
+  <text x="480" y="192" text-anchor="middle" class="box-sub">Security headers (HSTS, CSP, …)</text>
+
+  <rect x="620" y="130" width="200" height="70" rx="8" class="app-bg"/>
+  <text x="720" y="158" text-anchor="middle" class="box-label">React UI</text>
+  <text x="720" y="178" text-anchor="middle" class="box-sub">Server Components + Client</text>
+  <text x="720" y="192" text-anchor="middle" class="box-sub">Tailwind + shadcn/ui</text>
+
+  <rect x="380" y="225" width="440" height="70" rx="8" class="app-bg"/>
+  <text x="600" y="253" text-anchor="middle" class="box-label">Server Actions / API Routes</text>
+  <text x="600" y="273" text-anchor="middle" class="box-sub">Zod input validation · requireUser() guard · revalidatePath</text>
+  <text x="600" y="287" text-anchor="middle" class="box-sub">/api/scheduler/propose · /api/zoom/oauth/callback · /api/webhooks/zoom/chat</text>
+
+  <rect x="380" y="320" width="200" height="70" rx="8" class="app-bg"/>
+  <text x="480" y="348" text-anchor="middle" class="box-label">Scheduler Engine</text>
+  <text x="480" y="368" text-anchor="middle" class="box-sub">Pure TypeScript</text>
+  <text x="480" y="382" text-anchor="middle" class="box-sub">No DB, no side effects</text>
+
+  <rect x="620" y="320" width="200" height="70" rx="8" class="app-bg"/>
+  <text x="720" y="348" text-anchor="middle" class="box-label">Zoom Client</text>
+  <text x="720" y="368" text-anchor="middle" class="box-sub">In-memory token cache</text>
+  <text x="720" y="382" text-anchor="middle" class="box-sub">HMAC verifier</text>
+
+  <rect x="380" y="415" width="200" height="70" rx="8" class="app-bg"/>
+  <text x="480" y="443" text-anchor="middle" class="box-label">Prisma ORM</text>
+  <text x="480" y="463" text-anchor="middle" class="box-sub">Type-safe queries</text>
+  <text x="480" y="477" text-anchor="middle" class="box-sub">Migrations</text>
+
+  <rect x="620" y="415" width="200" height="70" rx="8" class="app-bg"/>
+  <text x="720" y="443" text-anchor="middle" class="box-label">Supabase Auth Client</text>
+  <text x="720" y="463" text-anchor="middle" class="box-sub">Session cookies</text>
+  <text x="720" y="477" text-anchor="middle" class="box-sub">SSR-safe</text>
+
+  <rect x="380" y="510" width="440" height="70" rx="8" class="app-bg"/>
+  <text x="600" y="538" text-anchor="middle" class="box-label">Environment Variables</text>
+  <text x="600" y="558" text-anchor="middle" class="box-sub">DB connection string · Zoom client IDs/secrets · webhook signing secrets · Google Maps API key</text>
+  <text x="600" y="572" text-anchor="middle" class="box-sub">Never in source control · injected at runtime</text>
+
+  <!-- DATA STORE -->
+  <text x="1100" y="100" text-anchor="middle" class="group-label">DATA STORE</text>
+  <rect x="970" y="120" width="260" height="120" rx="10" class="db-bg"/>
+  <text x="1100" y="148" text-anchor="middle" class="box-label">PostgreSQL (Supabase)</text>
+  <text x="1100" y="172" text-anchor="middle" class="box-sub">AES-256 at rest</text>
+  <text x="1100" y="186" text-anchor="middle" class="box-sub">TLS 1.2+ in transit</text>
+  <text x="1100" y="206" text-anchor="middle" class="box-sub">Schedules · Clients · Providers</text>
+  <text x="1100" y="220" text-anchor="middle" class="box-sub">Authorizations · Communications</text>
+
+  <rect x="970" y="260" width="260" height="80" rx="10" class="db-bg"/>
+  <text x="1100" y="288" text-anchor="middle" class="box-label">Supabase Auth Service</text>
+  <text x="1100" y="308" text-anchor="middle" class="box-sub">Hashed credentials</text>
+  <text x="1100" y="322" text-anchor="middle" class="box-sub">Session token issuance</text>
+
+  <!-- EXTERNAL APIS -->
+  <text x="1100" y="380" text-anchor="middle" class="group-label">EXTERNAL SERVICES</text>
+  <rect x="970" y="400" width="260" height="80" rx="10" class="ext-bg"/>
+  <text x="1100" y="428" text-anchor="middle" class="box-label">Zoom Platform</text>
+  <text x="1100" y="448" text-anchor="middle" class="box-sub">Chat API · Phone API</text>
+  <text x="1100" y="462" text-anchor="middle" class="box-sub">Webhooks (HMAC-SHA256 signed)</text>
+
+  <rect x="970" y="500" width="260" height="80" rx="10" class="ext-bg"/>
+  <text x="1100" y="528" text-anchor="middle" class="box-label">Google Maps</text>
+  <text x="1100" y="548" text-anchor="middle" class="box-sub">Distance Matrix API</text>
+  <text x="1100" y="562" text-anchor="middle" class="box-sub">Drive time lookups</text>
+
+  <!-- ARROWS -->
+  <!-- Admin browser → Middleware -->
+  <path d="M 260 160 L 380 160" class="arrow" marker-end="url(#arrow)"/>
+  <text x="320" y="152" text-anchor="middle" class="arrow-label">HTTPS</text>
+
+  <!-- Zoom client → Webhook receiver via Zoom platform -->
+  <path d="M 260 260 L 320 260 L 320 600 L 1100 600 L 1100 480" class="arrow-dashed" marker-end="url(#arrow)"/>
+  <text x="700" y="615" text-anchor="middle" class="arrow-label">Zoom delivers signed webhook payload</text>
+
+  <!-- Webhook → Server Actions/API Routes -->
+  <path d="M 970 440 L 820 440 L 820 260 L 820 260" class="arrow" marker-end="url(#arrow)"/>
+  <text x="900" y="350" text-anchor="middle" class="arrow-label" transform="rotate(-90 900 350)">Webhook events</text>
+
+  <!-- App → Zoom Platform (outbound) -->
+  <path d="M 820 380 L 970 440" class="arrow" marker-end="url(#arrow)"/>
+  <text x="900" y="395" text-anchor="middle" class="arrow-label">REST (Bearer token)</text>
+
+  <!-- App → Postgres -->
+  <path d="M 580 450 L 970 180" class="arrow" marker-end="url(#arrow)"/>
+  <text x="775" y="290" text-anchor="middle" class="arrow-label">SQL over TLS</text>
+
+  <!-- App → Supabase Auth -->
+  <path d="M 820 450 L 970 300" class="arrow" marker-end="url(#arrow)"/>
+
+  <!-- App → Google Maps -->
+  <path d="M 820 460 L 970 540" class="arrow" marker-end="url(#arrow)"/>
+  <text x="895" y="510" text-anchor="middle" class="arrow-label">HTTPS</text>
+
+  <!-- LEGEND -->
+  <rect x="60" y="700" width="1280" height="160" rx="8" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <text x="80" y="726" class="group-label">DATA FLOW NOTES</text>
+  <text x="80" y="752" class="box-sub">1. Admin auth: browser → Next.js middleware → Supabase Auth verifies session cookie on every request before any data is accessed.</text>
+  <text x="80" y="772" class="box-sub">2. Inbound chat: Zoom Platform → /api/webhooks/zoom/chat → HMAC-SHA256 signature verified → message persisted to PostgreSQL.</text>
+  <text x="80" y="792" class="box-sub">3. Outbound chat: admin clicks Reply → Server Action (auth-gated) → Zoom Client fetches bot token (cached in-memory, never persisted) → REST POST to api.zoom.us.</text>
+  <text x="80" y="812" class="box-sub">4. Scheduling: pure-TypeScript optimizer reads context from Prisma, returns proposed sessions; persistence happens at the route boundary, not inside the engine.</text>
+  <text x="80" y="832" class="box-sub">5. Drive times: scheduling routes call Google Maps Distance Matrix API server-side using the GOOGLE_MAPS_API_KEY env var; results currently held in memory per-run only.</text>
+  <text x="80" y="852" class="box-sub">6. Secrets: all API keys, OAuth client secrets, webhook signing tokens, and DB credentials live in environment variables — not in source code or the database.</text>
+</svg>

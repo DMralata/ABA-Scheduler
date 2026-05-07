@@ -1,0 +1,478 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Center {
+  id                  String           @id @default(cuid())
+  name                String           @unique
+  street              String?
+  city                String?
+  state               String?
+  zip                 String?
+  timezone            String           @default("America/New_York")
+  defaultSessionHours Float            @default(4.0)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  latitude            Float?
+  longitude           Float?
+  // SCHOOL location for clients receiving direct therapy at school.
+  // Single shared address per center until per-client school addresses are added.
+  schoolStreet        String?
+  schoolCity          String?
+  schoolState         String?
+  schoolZip           String?
+  schoolLatitude      Float?
+  schoolLongitude     Float?
+  clients             Client[]
+  providers           Provider[]
+  recurringEvents     RecurringEvent[]
+  sessions            Session[]
+}
+
+model Client {
+  id                    String                @id @default(cuid())
+  externalId            String?               @unique
+  firstName             String
+  lastName              String
+  dateOfBirth           DateTime
+  gender                String
+  spanish               Boolean               @default(false)
+  minimumRbtLevel       RbtLevel?
+  femaleProviderOnly    Boolean               @default(false)
+  centerId              String?
+  activeDate            DateTime
+  terminationDate       DateTime?
+  street                String?
+  city                  String?
+  state                 String?
+  zip                   String?
+  latitude              Float?
+  longitude             Float?
+  defaultSessionHours   Float?
+  insurance             String
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  preferredLocation     LocationType          @default(CENTER)
+  phoneLabel            String?
+  phoneNumber           String?
+  approvedHomeProviders ApprovedHome[]
+  authorizations        Authorization[]
+  center                Center?               @relation(fields: [centerId], references: [id])
+  availability          ClientAvailability[]
+  blocks                ClientBlock[]
+  preferredSlots        ClientPreferredSlot[]
+  inboundMessages       InboundMessage[]
+  outboundMessages      OutboundMessage[]     @relation("ClientOutbound")
+  proposedSessions      ProposedSession[]
+  sessions              Session[]
+
+  @@index([centerId])
+}
+
+model Provider {
+  id               String                   @id @default(cuid())
+  externalId       String?                  @unique
+  firstName        String
+  lastName         String
+  position         Position
+  rbtLevel         RbtLevel?
+  gender           String
+  spanish          Boolean                  @default(false)
+  status           ProviderStatus           @default(ACTIVE)
+  centerId         String?
+  street           String?
+  city             String?
+  state            String?
+  zip              String?
+  latitude         Float?
+  longitude        Float?
+  payRateHourly    Float?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  phoneNumber      String?
+  zoomUserId       String?                  @unique
+  approvedClients  ApprovedHome[]
+  inboundMessages  InboundMessage[]
+  outboundMessages OutboundMessage[]        @relation("ProviderOutbound")
+  proposedSessions ProposedSession[]
+  center           Center?                  @relation(fields: [centerId], references: [id])
+  availability     ProviderAvailability[]
+  blocks           ProviderBlock[]
+  recurringEvents  RecurringEventProvider[]
+  sessions         Session[]
+
+  @@index([centerId])
+}
+
+model ApprovedHome {
+  clientId   String
+  providerId String
+  assignedAt DateTime  @default(now())
+  endDate    DateTime?
+  client     Client    @relation(fields: [clientId], references: [id])
+  provider   Provider  @relation(fields: [providerId], references: [id])
+
+  @@id([clientId, providerId])
+  @@index([clientId, endDate])
+  @@index([providerId, endDate])
+}
+
+model Authorization {
+  id                   String            @id @default(cuid())
+  clientId             String
+  authNumber           String?
+  serviceCode          String?
+  fundingSource        String?
+  approvedHoursPerWeek Float
+  startDate            DateTime
+  endDate              DateTime
+  notes                String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  client               Client            @relation(fields: [clientId], references: [id])
+  proposedSessions     ProposedSession[]
+  sessions             Session[]
+
+  @@index([clientId, startDate, endDate])
+}
+
+model SessionType {
+  id               String            @id @default(cuid())
+  name             String            @unique
+  serviceCode      String?
+  billable         Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  requiresBcba     Boolean           @default(false)
+  proposedSessions ProposedSession[]
+  recurringEvents  RecurringEvent[]
+  sessions         Session[]
+}
+
+model RecurringEvent {
+  id            String                   @id @default(cuid())
+  name          String
+  sessionTypeId String
+  centerId      String?
+  frequency     RecurrenceFrequency
+  daysOfWeek    DayOfWeek[]
+  dayOfMonth    Int?
+  startTime     String
+  endTime       String
+  timezone      String                   @default("America/New_York")
+  startDate     DateTime
+  endDate       DateTime?
+  billable      Boolean                  @default(false)
+  notes         String?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+  center        Center?                  @relation(fields: [centerId], references: [id])
+  sessionType   SessionType              @relation(fields: [sessionTypeId], references: [id])
+  providers     RecurringEventProvider[]
+  sessions      Session[]
+
+  @@index([centerId])
+}
+
+model RecurringEventProvider {
+  recurringEventId String
+  providerId       String
+  provider         Provider       @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  recurringEvent   RecurringEvent @relation(fields: [recurringEventId], references: [id], onDelete: Cascade)
+
+  @@id([recurringEventId, providerId])
+}
+
+model Session {
+  id                 String           @id @default(cuid())
+  name               String
+  sessionTypeId      String
+  providerId         String
+  clientId           String?
+  authorizationId    String?
+  startTime          DateTime
+  endTime            DateTime
+  timezone           String?
+  billable           Boolean          @default(true)
+  status             SessionStatus    @default(SCHEDULED)
+  notes              String?
+  cancellationReason String?
+  needsAttention     Boolean          @default(false)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  locationType       LocationType?    @default(CENTER)
+  centerId           String?
+  cancelledBy        CancelledBy?
+  recurringEventId   String?
+  proposedSession    ProposedSession?
+  authorization      Authorization?   @relation(fields: [authorizationId], references: [id])
+  center             Center?          @relation(fields: [centerId], references: [id])
+  client             Client?          @relation(fields: [clientId], references: [id])
+  provider           Provider         @relation(fields: [providerId], references: [id])
+  recurringEvent     RecurringEvent?  @relation(fields: [recurringEventId], references: [id])
+  sessionType        SessionType      @relation(fields: [sessionTypeId], references: [id])
+
+  @@index([providerId, startTime])
+  @@index([clientId, startTime])
+  @@index([clientId, status])
+  @@index([startTime, endTime])
+  @@index([authorizationId])
+  @@index([recurringEventId])
+}
+
+model ClientAvailability {
+  id        String    @id @default(cuid())
+  clientId  String
+  dayOfWeek DayOfWeek
+  startTime String
+  endTime   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  client    Client    @relation(fields: [clientId], references: [id])
+
+  @@index([clientId, dayOfWeek])
+}
+
+model ClientPreferredSlot {
+  id        String    @id @default(cuid())
+  clientId  String
+  dayOfWeek DayOfWeek
+  startTime String
+  createdAt DateTime  @default(now())
+  client    Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, dayOfWeek, startTime])
+  @@index([clientId])
+}
+
+model ProviderAvailability {
+  id         String    @id @default(cuid())
+  providerId String
+  dayOfWeek  DayOfWeek
+  startTime  String
+  endTime    String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  provider   Provider  @relation(fields: [providerId], references: [id])
+
+  @@index([providerId, dayOfWeek])
+}
+
+model ProviderBlock {
+  id         String   @id @default(cuid())
+  providerId String
+  date       DateTime
+  startTime  String
+  endTime    String
+  reason     String?
+  createdAt  DateTime @default(now())
+  provider   Provider @relation(fields: [providerId], references: [id])
+
+  @@index([providerId, date])
+}
+
+model ClientBlock {
+  id        String   @id @default(cuid())
+  clientId  String
+  date      DateTime
+  startTime String
+  endTime   String
+  reason    String?
+  createdAt DateTime @default(now())
+  client    Client   @relation(fields: [clientId], references: [id])
+
+  @@index([clientId, date])
+}
+
+model ProposedSession {
+  id              String         @id @default(cuid())
+  weekOf          DateTime
+  clientId        String
+  providerId      String
+  sessionTypeId   String
+  authorizationId String?
+  startTime       DateTime
+  endTime         DateTime
+  timezone        String?
+  status          ProposalStatus @default(PENDING)
+  sessionId       String?        @unique
+  reasoning       String?
+  rejectionReason String?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  createdAt       DateTime       @default(now())
+  locationType    LocationType?  @default(CENTER)
+  authorization   Authorization? @relation(fields: [authorizationId], references: [id])
+  client          Client         @relation(fields: [clientId], references: [id])
+  provider        Provider       @relation(fields: [providerId], references: [id])
+  session         Session?       @relation(fields: [sessionId], references: [id])
+  sessionType     SessionType    @relation(fields: [sessionTypeId], references: [id])
+
+  @@index([weekOf])
+  @@index([clientId, weekOf])
+  @@index([providerId, weekOf])
+  @@index([status, weekOf])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  timestamp    DateTime @default(now())
+  userId       String
+  action       String
+  resourceType String
+  resourceId   String
+  metadata     Json?
+
+  @@index([resourceType, resourceId])
+  @@index([userId, timestamp])
+  @@index([timestamp])
+}
+
+model InboundMessage {
+  id                 String               @id @default(cuid())
+  zoomMessageId      String?              @unique
+  messageType        InboundMessageType
+  fromNumber         String
+  fromName           String?
+  toNumber           String?
+  rawBody            String
+  isCancellation     Boolean              @default(false)
+  aiSummary          String?
+  aiClassification   String?
+  classificationConf Float?
+  resolvedClientId   String?
+  resolvedProviderId String?
+  status             InboundMessageStatus @default(UNREAD)
+  receivedAt         DateTime
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  client             Client?              @relation(fields: [resolvedClientId], references: [id])
+  provider           Provider?            @relation(fields: [resolvedProviderId], references: [id])
+  outboundMessages   OutboundMessage[]
+
+  @@index([status, createdAt])
+  @@index([fromNumber])
+  @@index([resolvedClientId])
+  @@index([resolvedProviderId])
+}
+
+model OutboundMessage {
+  id                  String                @id @default(cuid())
+  inboundMessageId    String?
+  recipientType       String
+  recipientClientId   String?
+  recipientProviderId String?
+  toNumber            String
+  draftBody           String
+  editedBody          String?
+  sentBody            String?
+  status              OutboundMessageStatus @default(DRAFT)
+  outreachReason      String?
+  relatedSessionId    String?
+  zoomMessageId       String?               @unique
+  sentAt              DateTime?
+  sentByUserId        String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  inboundMessage      InboundMessage?       @relation(fields: [inboundMessageId], references: [id])
+  recipientClient     Client?               @relation("ClientOutbound", fields: [recipientClientId], references: [id])
+  recipientProvider   Provider?             @relation("ProviderOutbound", fields: [recipientProviderId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([inboundMessageId])
+  @@index([recipientClientId])
+  @@index([recipientProviderId])
+}
+
+enum Position {
+  BCBA
+  BCaBA
+  RBT
+}
+
+enum RbtLevel {
+  I
+  II
+  III
+}
+
+enum SessionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum DayOfWeek {
+  SUNDAY
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+}
+
+enum ProviderStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+}
+
+enum LocationType {
+  HOME
+  CENTER
+  HYBRID
+  SCHOOL
+}
+
+enum AuthorizationStatus {
+  PENDING
+  ACTIVE
+  EXPIRING_SOON
+  EXHAUSTED
+  EXPIRED
+  DENIED
+}
+
+enum ProposalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum CancelledBy {
+  CLIENT
+  PROVIDER
+}
+
+enum RecurrenceFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum InboundMessageType {
+  SMS
+  VOICEMAIL
+  ZOOM_CHAT
+}
+
+enum InboundMessageStatus {
+  UNREAD
+  READ
+  ACTIONED
+  DISMISSED
+}
+
+enum OutboundMessageStatus {
+  DRAFT
+  SENT
+  FAILED
+}

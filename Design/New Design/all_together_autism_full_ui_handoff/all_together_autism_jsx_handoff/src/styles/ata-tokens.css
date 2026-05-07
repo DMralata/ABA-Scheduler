@@ -1,0 +1,655 @@
+:root {
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  --ata-blue-25: #F5F9FF;
+  --ata-blue-50: #EFF6FF;
+  --ata-blue-100: #DBEAFE;
+  --ata-blue-200: #BFDBFE;
+  --ata-blue-300: #93C5FD;
+  --ata-blue-400: #60A5FA;
+  --ata-blue-500: #3B82F6;
+  --ata-blue-600: #2563EB;
+  --ata-blue-700: #1D4ED8;
+  --ata-blue-800: #1E40AF;
+  --ata-blue-900: #1E3A8A;
+
+  --ata-navy-950: #061529;
+  --ata-navy-900: #08203D;
+  --ata-navy-850: #0A2A50;
+  --ata-navy-800: #0C3568;
+
+  --ata-bg: #F8FAFC;
+  --ata-surface: #FFFFFF;
+  --ata-surface-muted: #F9FAFB;
+
+  --ata-gray-25: #FCFCFD;
+  --ata-gray-50: #F9FAFB;
+  --ata-gray-100: #F2F4F7;
+  --ata-gray-200: #EAECF0;
+  --ata-gray-300: #D0D5DD;
+  --ata-gray-400: #98A2B3;
+  --ata-gray-500: #667085;
+  --ata-gray-600: #475467;
+  --ata-gray-700: #344054;
+  --ata-gray-800: #1D2939;
+  --ata-gray-900: #101828;
+
+  --ata-success-50: #ECFDF3;
+  --ata-success-100: #D1FADF;
+  --ata-success-500: #12B76A;
+  --ata-success-600: #039855;
+  --ata-success-700: #027A48;
+
+  --ata-warning-50: #FFFAEB;
+  --ata-warning-100: #FEF0C7;
+  --ata-warning-400: #FDB022;
+  --ata-warning-500: #F79009;
+  --ata-warning-600: #DC6803;
+
+  --ata-danger-50: #FEF3F2;
+  --ata-danger-100: #FEE4E2;
+  --ata-danger-300: #FDA29B;
+  --ata-danger-500: #F04438;
+  --ata-danger-600: #D92D20;
+  --ata-danger-700: #B42318;
+
+  --ata-purple-50: #F4F3FF;
+  --ata-purple-100: #EBE9FE;
+  --ata-purple-500: #7A5AF8;
+  --ata-purple-600: #6938EF;
+
+  --ata-cyan-50: #ECFDFF;
+  --ata-cyan-100: #CFF9FE;
+  --ata-cyan-500: #06AED4;
+  --ata-cyan-600: #088AB2;
+
+  --ata-teal-50: #F0FDFA;
+  --ata-teal-100: #CCFBF1;
+  --ata-teal-500: #14B8A6;
+  --ata-teal-600: #0D9488;
+
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-full: 9999px;
+
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.10), 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 4px 8px -2px rgba(16, 24, 40, 0.10), 0 2px 4px -2px rgba(16, 24, 40, 0.06);
+  --shadow-lg: 0 12px 16px -4px rgba(16, 24, 40, 0.10), 0 4px 6px -2px rgba(16, 24, 40, 0.05);
+  --shadow-modal: 0 24px 48px -12px rgba(16, 24, 40, 0.28);
+  --shadow-dock: 0 16px 40px rgba(16, 24, 40, 0.18);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--ata-bg);
+  color: var(--ata-gray-900);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--ata-blue-500);
+  outline-offset: 2px;
+}
+
+/* App shell */
+.ata-app-shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--ata-bg);
+}
+
+.ata-app-main {
+  flex: 1;
+  min-width: 0;
+  background: var(--ata-bg);
+}
+
+.ata-page {
+  min-height: 100vh;
+  padding: 32px 40px;
+  background: var(--ata-bg);
+}
+
+/* Sidebar */
+.ata-sidebar {
+  width: 184px;
+  flex: 0 0 184px;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #061529 0%, #08203D 52%, #061529 100%);
+  color: white;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 12px 16px;
+}
+
+.ata-sidebar--compact {
+  width: 72px;
+  flex-basis: 72px;
+  align-items: center;
+}
+
+.ata-sidebar-logo {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 18px;
+}
+
+.ata-sidebar-logo img {
+  max-width: 144px;
+  max-height: 44px;
+  object-fit: contain;
+}
+
+.ata-sidebar--compact .ata-sidebar-logo img {
+  max-width: 38px;
+  max-height: 38px;
+}
+
+.ata-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ata-nav-item {
+  height: 44px;
+  border-radius: 12px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 14px;
+  font-weight: 500;
+  border: 0;
+  background: transparent;
+  width: 100%;
+}
+
+.ata-sidebar--compact .ata-nav-item {
+  width: 44px;
+  padding: 0;
+  justify-content: center;
+}
+
+.ata-nav-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #FFFFFF;
+}
+
+.ata-nav-item--active {
+  background: linear-gradient(180deg, #2563EB 0%, #1D4ED8 100%);
+  color: #FFFFFF;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.34);
+}
+
+.ata-nav-label {
+  white-space: nowrap;
+}
+
+.ata-sidebar--compact .ata-nav-label {
+  display: none;
+}
+
+.ata-sidebar-footer {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.ata-profile-block {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #FFFFFF;
+}
+
+.ata-sidebar--compact .ata-profile-copy {
+  display: none;
+}
+
+.ata-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #FFFFFF;
+  background: var(--ata-blue-600);
+  flex: 0 0 auto;
+}
+
+.ata-online-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: var(--ata-success-500);
+  display: inline-block;
+}
+
+/* Shared UI */
+.ata-card {
+  background: #FFFFFF;
+  border: 1px solid rgba(16, 24, 40, 0.08);
+  border-radius: 16px;
+  box-shadow: var(--shadow-xs);
+}
+
+.ata-card-header {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--ata-gray-100);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ata-card-title {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 700;
+  color: var(--ata-gray-900);
+}
+
+.ata-card-body {
+  padding: 20px;
+}
+
+.ata-btn {
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.ata-btn--primary {
+  background: var(--ata-blue-600);
+  color: #FFFFFF;
+}
+
+.ata-btn--primary:hover {
+  background: var(--ata-blue-700);
+}
+
+.ata-btn--secondary {
+  background: #FFFFFF;
+  border-color: var(--ata-gray-200);
+  color: var(--ata-gray-800);
+}
+
+.ata-btn--secondary:hover {
+  background: var(--ata-gray-50);
+}
+
+.ata-btn--ghost {
+  background: transparent;
+  color: var(--ata-blue-600);
+}
+
+.ata-btn--ghost:hover {
+  background: var(--ata-blue-50);
+}
+
+.ata-btn--danger {
+  background: var(--ata-danger-600);
+  color: #FFFFFF;
+}
+
+.ata-btn--danger:hover {
+  background: var(--ata-danger-700);
+}
+
+.ata-btn--sm {
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+}
+
+.ata-btn--lg {
+  height: 48px;
+  padding: 0 20px;
+  border-radius: 12px;
+}
+
+.ata-input {
+  height: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--ata-gray-200);
+  background: #FFFFFF;
+  padding: 0 14px;
+  font-size: 14px;
+  color: var(--ata-gray-900);
+}
+
+.ata-input::placeholder {
+  color: var(--ata-gray-400);
+}
+
+.ata-input:focus {
+  border-color: var(--ata-blue-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.16);
+  outline: none;
+}
+
+.ata-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.ata-search input {
+  width: 100%;
+  padding-left: 38px;
+}
+
+.ata-search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--ata-gray-400);
+}
+
+.ata-kbd {
+  position: absolute;
+  right: 10px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: var(--ata-gray-100);
+  border: 1px solid var(--ata-gray-200);
+  color: var(--ata-gray-500);
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.ata-badge {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid transparent;
+}
+
+.ata-badge--active,
+.ata-badge--success {
+  background: var(--ata-success-50);
+  color: var(--ata-success-700);
+  border-color: var(--ata-success-100);
+}
+
+.ata-badge--warning {
+  background: var(--ata-warning-50);
+  color: var(--ata-warning-600);
+  border-color: var(--ata-warning-100);
+}
+
+.ata-badge--danger {
+  background: var(--ata-danger-50);
+  color: var(--ata-danger-700);
+  border-color: var(--ata-danger-100);
+}
+
+.ata-chip {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--ata-gray-200);
+  background: #FFFFFF;
+  color: var(--ata-gray-700);
+}
+
+.ata-chip--blue {
+  background: var(--ata-blue-50);
+  color: var(--ata-blue-700);
+  border-color: var(--ata-blue-100);
+}
+
+.ata-chip--purple {
+  background: var(--ata-purple-50);
+  color: var(--ata-purple-600);
+  border-color: var(--ata-purple-100);
+}
+
+.ata-chip--warning {
+  background: var(--ata-warning-50);
+  color: var(--ata-warning-600);
+  border-color: var(--ata-warning-100);
+}
+
+.ata-table-card {
+  background: #FFFFFF;
+  border: 1px solid var(--ata-gray-200);
+  border-radius: 16px;
+  box-shadow: var(--shadow-xs);
+  overflow: hidden;
+}
+
+.ata-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ata-table thead tr {
+  height: 48px;
+  background: var(--ata-gray-25);
+}
+
+.ata-table th {
+  padding: 0 20px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--ata-gray-600);
+  text-align: left;
+  border-bottom: 1px solid var(--ata-gray-200);
+}
+
+.ata-table tbody tr {
+  height: 68px;
+  border-bottom: 1px solid var(--ata-gray-100);
+}
+
+.ata-table tbody tr:hover {
+  background: var(--ata-blue-25);
+}
+
+.ata-table tbody tr.ata-row-selected {
+  background: var(--ata-blue-50);
+  box-shadow: inset 3px 0 0 var(--ata-blue-600);
+}
+
+.ata-table td {
+  padding: 0 20px;
+  vertical-align: middle;
+  font-size: 14px;
+  color: var(--ata-gray-700);
+}
+
+.ata-progress {
+  width: 120px;
+  height: 4px;
+  background: var(--ata-gray-100);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.ata-progress-fill {
+  height: 100%;
+  border-radius: 9999px;
+}
+
+.ata-progress-fill--success {
+  background: var(--ata-success-600);
+}
+
+.ata-progress-fill--warning {
+  background: var(--ata-warning-600);
+}
+
+.ata-progress-fill--danger {
+  background: var(--ata-danger-600);
+}
+
+/* Modals */
+.ata-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(6, 21, 41, 0.58);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.ata-modal {
+  width: min(560px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #FFFFFF;
+  border-radius: 20px;
+  box-shadow: var(--shadow-modal);
+}
+
+.ata-modal-header {
+  padding: 28px 32px 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ata-modal-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ata-modal-title {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 700;
+  color: var(--ata-gray-900);
+  margin: 0;
+}
+
+.ata-modal-subtitle {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ata-gray-600);
+}
+
+.ata-modal-body {
+  padding: 0 32px 28px;
+  overflow-y: auto;
+}
+
+.ata-modal-footer {
+  padding: 20px 32px;
+  border-top: 1px solid var(--ata-gray-100);
+  display: flex;
+  gap: 12px;
+}
+
+.ata-icon-button {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--ata-gray-200);
+  background: #FFFFFF;
+  color: var(--ata-gray-600);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ata-icon-button:hover {
+  background: var(--ata-gray-50);
+}
+
+/* Floating dock */
+.ata-floating-dock {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 56px;
+  border-radius: 18px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(16, 24, 40, 0.08);
+  box-shadow: var(--shadow-dock);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 20;
+}
