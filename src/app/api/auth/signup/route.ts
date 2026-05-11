@@ -44,22 +44,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const admin = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  try {
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
-  const { error } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  });
+    const { error } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
 
-  if (error) {
-    const status = error.message.toLowerCase().includes("already")
-      ? 409
-      : 400;
-    return NextResponse.json({ error: error.message }, { status });
+    if (error) {
+      console.error("[auth/signup] Supabase error:", error);
+      const status = error.message.toLowerCase().includes("already")
+        ? 409
+        : 400;
+      return NextResponse.json({ error: error.message }, { status });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("[auth/signup] Unhandled error:", err);
+    const message =
+      err instanceof Error ? err.message : "Unexpected error.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  return NextResponse.json({ success: true });
 }
