@@ -9,20 +9,24 @@ import { NextRequest, NextResponse } from "next/server";
 // This route is excluded from Supabase session auth via middleware.
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const { searchParams } = new URL(request.url);
-  const code = searchParams.get("code");
-  const error = searchParams.get("error");
+  const code = request.nextUrl.searchParams.get("code");
+  const error = request.nextUrl.searchParams.get("error");
+
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const forwardedProto = request.headers.get("x-forwarded-proto") ?? "https";
+  const base = forwardedHost
+    ? `${forwardedProto}://${forwardedHost}`
+    : request.nextUrl.origin;
 
   if (error) {
     console.error("[zoom-oauth-callback] Authorization denied:", error);
-    return NextResponse.redirect(new URL("/", request.url));
+    return NextResponse.redirect(new URL("/", base));
   }
 
   if (!code) {
     console.error("[zoom-oauth-callback] No code received");
-    return NextResponse.redirect(new URL("/", request.url));
+    return NextResponse.redirect(new URL("/", base));
   }
 
-  // Installation complete — redirect to the communications inbox
-  return NextResponse.redirect(new URL("/communications", request.url));
+  return NextResponse.redirect(new URL("/communications", base));
 }
