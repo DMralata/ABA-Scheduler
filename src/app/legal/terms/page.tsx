@@ -4,7 +4,7 @@ export default function TermsPage() {
   return (
     <>
       <h1>Terms of Use</h1>
-      <p><strong>Last updated:</strong> May 7, 2026</p>
+      <p><strong>Last updated:</strong> May 11, 2026</p>
 
       <p>
         These Terms of Use govern access to and use of the ABA Scheduler application (&quot;the Application&quot;), operated by All Together Autism (&quot;we&quot;, &quot;us&quot;). By accessing or using the Application, you agree to these Terms.
