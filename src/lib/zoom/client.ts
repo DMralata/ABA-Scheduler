@@ -98,7 +98,8 @@ export async function getZoomAccessToken(): Promise<string> {
 }
 
 export async function getZoomUserName(zoomUserId: string): Promise<string | null> {
-  const tryFetch = async (token: string): Promise<string | null> => {
+  try {
+    const token = await getZoomBotToken();
     const res = await fetch(
       `https://api.zoom.us/v2/users/${encodeURIComponent(zoomUserId)}`,
       { headers: { Authorization: `Bearer ${token}` } }
@@ -111,18 +112,8 @@ export async function getZoomUserName(zoomUserId: string): Promise<string | null
     };
     return (
       data.display_name ??
-      ([data.first_name, data.last_name].filter(Boolean).join(" ") ||
-      null)
+      ([data.first_name, data.last_name].filter(Boolean).join(" ") || null)
     );
-  };
-
-  try {
-    // Try S2S access token first (has user:read:admin scope), fall back to bot token
-    const accessToken = await getZoomAccessToken();
-    const name = await tryFetch(accessToken);
-    if (name) return name;
-    const botToken = await getZoomBotToken();
-    return await tryFetch(botToken);
   } catch (err) {
     console.error("[getZoomUserName]", err);
     return null;
