@@ -9,7 +9,6 @@ import {
   UserRound,
   Repeat,
   MessageCircle,
-  Shield,
   Settings as SettingsIcon,
   HelpCircle,
   LogOut,
@@ -33,7 +32,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/clients",        label: "Clients",          icon: Users },
   { href: "/providers",      label: "Providers",        icon: UserRound },
   { href: "/communications", label: "Communications",   icon: MessageCircle, badgeKind: "unread" },
-  { href: "/admin/coverage", label: "Coverage audit",   icon: Shield },
 ];
 
 type SidebarProps = {

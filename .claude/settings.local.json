@@ -118,7 +118,9 @@
       "Bash(ls src/app/\\\\\\(auth\\\\\\)/)",
       "Bash(find src/app -path '*auth*' -name 'page.tsx')",
       "Bash(cat middleware.ts)",
-      "Bash(cat src/middleware.ts)"
+      "Bash(cat src/middleware.ts)",
+      "Bash(ls \"src/app/\\(dashboard\\)/admin/\")",
+      "Bash(rmdir \"src/app/\\(dashboard\\)/admin/\")"
     ]
   }
 }
