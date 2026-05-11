@@ -4,7 +4,7 @@ export default function PrivacyPage() {
   return (
     <>
       <h1>Privacy Policy</h1>
-      <p><strong>Last updated:</strong> May 7, 2026</p>
+      <p><strong>Last updated:</strong> May 11, 2026</p>
 
       <p>
         The ABA Scheduler (&quot;the Application&quot;) is an internal scheduling tool operated by All Together Autism (&quot;we&quot;, &quot;us&quot;) for use by our internal administrative staff only. This Privacy Policy explains what information the Application collects, how it is used, how it is protected, and the rights you have over your personal information.
@@ -40,7 +40,7 @@ export default function PrivacyPage() {
       <h2>4. Sharing</h2>
       <p>We do not sell, rent, or share personal information with third parties for marketing purposes. Personal information is shared only with:</p>
       <ul>
-        <li>Service providers strictly necessary to operate the Application: Supabase (database/auth), Vercel (hosting), Google Maps (drive-time lookups for scheduling), Zoom (chat and phone).</li>
+        <li>Service providers strictly necessary to operate the Application: Supabase (database and authentication), Netlify (application hosting), Anthropic (Claude API for classifying and summarizing inbound chat messages; operated under zero-retention terms — content is not stored by Anthropic and is not used to train models), Google Maps (drive-time lookups for scheduling), and Zoom (chat and phone).</li>
         <li>Legal authorities when required by law.</li>
       </ul>
 
