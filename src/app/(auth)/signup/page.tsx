@@ -4,23 +4,50 @@ import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
-export default function LoginPage() {
+export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
     setLoading(true);
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const res = await fetch("/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
 
-    if (error) {
-      setError(error.message);
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+
+    if (!res.ok) {
+      setError(data.error ?? "Signup failed. Please try again.");
       setLoading(false);
+      return;
+    }
+
+    const supabase = createClient();
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (signInError) {
+      setError(
+        "Account created. Please sign in.",
+      );
+      setLoading(false);
+      window.location.href = "/login";
       return;
     }
 
@@ -86,7 +113,7 @@ export default function LoginPage() {
               margin: "6px 0 0",
             }}
           >
-            Sign in to your account
+            Create your account
           </p>
         </div>
 
@@ -128,7 +155,7 @@ export default function LoginPage() {
                 marginBottom: 6,
               }}
             >
-              Email
+              Work email
             </label>
             <input
               id="email"
@@ -137,8 +164,18 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
+              placeholder="you@alltogetherautism.com"
               className="ata-input"
             />
+            <p
+              style={{
+                fontSize: 12,
+                color: "var(--ata-gray-500)",
+                margin: "6px 0 0",
+              }}
+            >
+              Only @alltogetherautism.com addresses are permitted.
+            </p>
           </div>
           <div>
             <label
@@ -159,7 +196,41 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              autoComplete="current-password"
+              minLength={12}
+              autoComplete="new-password"
+              className="ata-input"
+            />
+            <p
+              style={{
+                fontSize: 12,
+                color: "var(--ata-gray-500)",
+                margin: "6px 0 0",
+              }}
+            >
+              At least 12 characters.
+            </p>
+          </div>
+          <div>
+            <label
+              htmlFor="confirmPassword"
+              style={{
+                display: "block",
+                fontSize: 13,
+                fontWeight: 600,
+                color: "var(--ata-gray-700)",
+                marginBottom: 6,
+              }}
+            >
+              Confirm password
+            </label>
+            <input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              minLength={12}
+              autoComplete="new-password"
               className="ata-input"
             />
           </div>
@@ -168,7 +239,7 @@ export default function LoginPage() {
             disabled={loading}
             className="ata-btn ata-btn--primary ata-btn--lg ata-btn--full"
           >
-            {loading ? "Signing in…" : "Sign in"}
+            {loading ? "Creating account…" : "Create account"}
           </button>
           <p
             style={{
@@ -178,12 +249,12 @@ export default function LoginPage() {
               textAlign: "center",
             }}
           >
-            Need an account?{" "}
+            Already have an account?{" "}
             <Link
-              href="/signup"
+              href="/login"
               style={{ color: "var(--ata-primary-600)", fontWeight: 600 }}
             >
-              Create one
+              Sign in
             </Link>
           </p>
         </form>

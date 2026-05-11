@@ -103,7 +103,22 @@
       "Bash(sips -g pixelWidth -g pixelHeight \"/Users/garrett/Desktop/Screenshot 2026-05-07 at 11.00.56 AM.png\")",
       "Bash(sips -g pixelWidth -g pixelHeight \"Screenshot 2026-05-07 at 11.00.56 AM.png\" \"Screenshot 2026-05-07 at 10.59.45 AM.png\" \"Screenshot 2026-05-07 at 11.10.18 AM.png\" \"Screenshot 2026-05-07 at 11.10.39 AM.png\")",
       "Bash(xxd)",
-      "Bash(defaults read *)"
+      "Bash(defaults read *)",
+      "Bash(git commit -m 'Initial commit *)",
+      "Bash(grep -rniE \"https?://[a-z0-9.-]+\\\\.[a-z]{2,}\\(/[^\\\\\"'\\\\` ]*\\)?\" --include=\"*.ts\" --include=\"*.tsx\" --include=\"*.js\" src/)",
+      "Bash(find src/app/legal -type d)",
+      "Bash(ls src/app/legal/)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(npx --version)",
+      "Bash(npx -y -p @mermaid-js/mermaid-cli mmdc --version)",
+      "Bash(python3 *)",
+      "Bash(pip3 install *)",
+      "Bash(ls src/app/\\\\\\(auth\\\\\\)/)",
+      "Bash(find src/app -path '*auth*' -name 'page.tsx')",
+      "Bash(cat middleware.ts)",
+      "Bash(cat src/middleware.ts)"
     ]
   }
 }
