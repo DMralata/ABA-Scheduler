@@ -22,16 +22,34 @@ export default function SignupPage() {
 
     setLoading(true);
 
-    const res = await fetch("/api/auth/signup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+    let res: Response;
+    try {
+      res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+    } catch (err) {
+      setError(
+        `Network error: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      setLoading(false);
+      return;
+    }
 
-    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    const rawText = await res.text();
+    let data: { error?: string } = {};
+    try {
+      data = JSON.parse(rawText) as { error?: string };
+    } catch {
+      // Non-JSON response — surface the raw body so we can see it
+    }
 
     if (!res.ok) {
-      setError(data.error ?? "Signup failed. Please try again.");
+      setError(
+        data.error ??
+          `HTTP ${res.status} ${res.statusText} — ${rawText.slice(0, 300)}`,
+      );
       setLoading(false);
       return;
     }
