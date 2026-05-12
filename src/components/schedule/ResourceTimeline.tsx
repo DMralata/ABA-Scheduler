@@ -32,7 +32,7 @@ const TIMELINE_COLORS = {
 const HOUR_START = 8;             // 8 am
 const HOUR_END = 20;              // 8 pm
 const HOURS = HOUR_END - HOUR_START;  // 12 hours
-const HOUR_PX = 100;              // px per hour — 15-min snap = 25 px
+const HOUR_PX = 72;               // px per hour — 15-min snap = 18 px
 const SNAP_MIN = 15;
 const SNAP_PX = (SNAP_MIN / 60) * HOUR_PX; // 25 px at HOUR_PX=100
 const ROW_H = 24;
