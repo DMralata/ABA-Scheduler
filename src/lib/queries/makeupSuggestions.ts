@@ -115,6 +115,7 @@ export async function getMakeupSuggestions(
   const session = await prisma.session.findUnique({
     where: { id: cancelledSessionId },
     include: {
+      sessionType: { select: { billable: true, requiresBcba: true } },
       client: {
         include: {
           availability: true,
@@ -131,10 +132,19 @@ export async function getMakeupSuggestions(
   });
 
   if (!session?.client || !session.clientId) return null;
+
+  // Makeup suggestions are only relevant for direct therapy — billable RBT-eligible
+  // sessions. BCBA-only or non-billable session types (supervision, lunch, drive
+  // time, etc.) should not surface makeup notifications or dropdowns.
+  if (!session.sessionType.billable || session.sessionType.requiresBcba) return null;
   const client = session.client;
   const maskClient = await getClientNameMasker();
   const maskedClientName = `${maskClient(client.firstName)} ${maskClient(client.lastName)}`;
-  const timezone = session.timezone ?? client.center?.timezone ?? "America/New_York";
+  // Pin to center timezone for determinism (per CLAUDE.md): scheduler internals
+  // must produce the same result regardless of who is logged in. session.timezone
+  // can carry a per-user display override that would make day-of-week math vary
+  // by viewer at DST boundaries.
+  const timezone = client.center?.timezone ?? "America/New_York";
   const cancelledDurationMins = Math.round((session.endTime.getTime() - session.startTime.getTime()) / 60_000);
 
   // ── 2. Authorization headroom ──────────────────────────────────────────────
@@ -223,13 +233,21 @@ export async function getMakeupSuggestions(
   }
 
   // ── 4. Load all eligible providers ─────────────────────────────────────────
-  const isHome = client.preferredLocation === "HOME" || client.preferredLocation === "HYBRID";
+  // Apply the approved-home-providers restriction only when the cancelled
+  // session's location resolves to HOME. HYBRID resolves to CENTER-preferred
+  // (per project convention), so HYBRID clients pull from the center pool and
+  // the validator enforces approved-home at accept time if the booking falls
+  // back to HOME. This matches the booker's behavior (it only checks
+  // approvedHomeProviders for actual HOME sessions).
+  const requiresApprovedHome = session.locationType === "HOME";
   const approvedProviderIds = new Set(client.approvedHomeProviders.map((a) => a.providerId));
 
   const allProviders = await prisma.provider.findMany({
     where: {
       status: "ACTIVE",
-      ...(isHome ? { id: { in: [...approvedProviderIds] } } : { centerId: client.centerId ?? undefined }),
+      ...(requiresApprovedHome
+        ? { id: { in: [...approvedProviderIds] } }
+        : { centerId: client.centerId ?? undefined }),
     },
     include: {
       availability: true,
@@ -259,6 +277,8 @@ export async function getMakeupSuggestions(
   // Load confirmed sessions AND pending/approved proposals for eligible providers.
   // Both occupy real time — a proposal the scheduler generated but hasn't been
   // approved yet is still a committed window that can't be double-suggested.
+  // locationType is needed to decide whether a drive-time buffer is required
+  // around each booking (CENTER↔CENTER is the only no-gap pair).
   const providerIds = eligibleProviders.map((p) => p.id);
   const [providerSessions, providerProposals] = await Promise.all([
     prisma.session.findMany({
@@ -267,7 +287,7 @@ export async function getMakeupSuggestions(
         status: { in: ["SCHEDULED", "IN_PROGRESS"] },
         startTime: { gte: weekStart, lt: weekEnd },
       },
-      select: { providerId: true, startTime: true, endTime: true, clientId: true },
+      select: { providerId: true, startTime: true, endTime: true, clientId: true, locationType: true },
     }),
     prisma.proposedSession.findMany({
       where: {
@@ -275,7 +295,7 @@ export async function getMakeupSuggestions(
         status: { in: ["PENDING", "APPROVED"] },
         startTime: { gte: weekStart, lt: weekEnd },
       },
-      select: { providerId: true, startTime: true, endTime: true },
+      select: { providerId: true, startTime: true, endTime: true, locationType: true },
     }),
   ]);
 
@@ -284,6 +304,22 @@ export async function getMakeupSuggestions(
     ...providerSessions,
     ...providerProposals.map((p) => ({ ...p, clientId: null })),
   ];
+
+  // Drive-time buffer: mirror validateDriveTimeGap's minimum-gap fallback so the
+  // suggester doesn't offer slots that the booker will immediately reject.
+  // Only CENTER↔CENTER transitions skip the buffer (provider stays put).
+  // HYBRID resolves to CENTER preferred, so treat it as CENTER for gap purposes.
+  const DRIVE_BUFFER_MINS = 15;
+  const newSessionLocationType = session.locationType;
+  function needsBufferAgainst(bookingLocation: string | null): boolean {
+    if (!newSessionLocationType || !bookingLocation) return false;
+    const a = newSessionLocationType === "HYBRID" ? "CENTER" : newSessionLocationType;
+    const b = bookingLocation === "HYBRID" ? "CENTER" : bookingLocation;
+    // Only CENTER↔CENTER is safe (provider stays at the same center).
+    // SCHOOL↔SCHOOL is NOT safe — different clients can be at different schools.
+    if (a === "CENTER" && b === "CENTER") return false;
+    return true;
+  }
 
   // Load the client's confirmed sessions AND proposals for the rest of this week.
   const clientRemainingDates = remainingDays.map((d) => d.dateStr);
@@ -319,6 +355,16 @@ export async function getMakeupSuggestions(
           .reduce((acc, p) => (p.type === "hour" || p.type === "minute" ? acc + (acc ? ":" : "") + p.value.replace("24", "00").padStart(2, "0") : acc), "")
       );
     return { start: fmt(s.startTime), end: fmt(s.endTime) };
+  };
+
+  // Same as toMinInterval but pads start/end by DRIVE_BUFFER_MINS when a
+  // drive transition is required between this booking and the proposed makeup.
+  const toMinIntervalWithBuffer = (s: { startTime: Date; endTime: Date; locationType: string | null }) => {
+    const iv = toMinInterval(s);
+    if (needsBufferAgainst(s.locationType)) {
+      return { start: iv.start - DRIVE_BUFFER_MINS, end: iv.end + DRIVE_BUFFER_MINS };
+    }
+    return iv;
   };
 
   // ── 5. Generate suggestions for each remaining day ─────────────────────────
@@ -387,7 +433,7 @@ export async function getMakeupSuggestions(
             }).format(s.startTime);
             return sStr === dateStr;
           })
-          .map(toMinInterval);
+          .map(toMinIntervalWithBuffer);
 
         const providerFree = subtractIntervals(providerWindowsToday, [...providerBlocksToday, ...providerBookingsToday]);
         const overlap = intersectIntervals(clientFree, providerFree);
@@ -446,15 +492,23 @@ export async function getMakeupSuggestions(
         })
         .map((b) => ({ start: parseHHMM(b.startTime), end: parseHHMM(b.endTime) }));
 
+      // Exclude the session being extended from the bookings list — its buffer
+      // would block the very space we want to extend INTO. The validator does
+      // the equivalent via excludeSessionId when rescheduleSession runs.
       const providerBookingsTodayExt = allProviderBookings
         .filter((s) => {
           if (s.providerId !== provider.id) return false;
+          if (
+            s.clientId === client.id &&
+            s.startTime.getTime() === existingSession.startTime.getTime() &&
+            s.endTime.getTime() === existingSession.endTime.getTime()
+          ) return false;
           const sStr = new Intl.DateTimeFormat("en-CA", {
             timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
           }).format(s.startTime);
           return sStr === dateStr;
         })
-        .map(toMinInterval);
+        .map(toMinIntervalWithBuffer);
 
       // Free windows after session end — for EXTEND LATER
       const afterSessionClient = clientFree.filter((iv) => iv.start >= sessionEndMins);

@@ -184,23 +184,41 @@ export async function bookSession(
 
         // Re-check ATI inside the transaction to close the race window.
         // This mirrors the pre-transaction check but runs under a serializable lock.
+        // Counts confirmed sessions AND in-flight PENDING/APPROVED proposals so
+        // a manual book can't push the client over the cap when the scheduler
+        // has already earmarked unconverted hours.
         if (billable && authorizationId) {
           const { weekStart, weekEnd } = getWeekBoundaries(startTime, timezone);
 
-          const sessions = await tx.session.findMany({
-            where: {
-              clientId: client.id,
-              authorizationId,
-              billable: true,
-              status: { in: ["SCHEDULED", "IN_PROGRESS", "COMPLETED"] },
-              startTime: { gte: weekStart, lt: weekEnd },
-            },
-            select: { startTime: true, endTime: true },
-          });
+          const [sessions, proposals] = await Promise.all([
+            tx.session.findMany({
+              where: {
+                clientId: client.id,
+                authorizationId,
+                billable: true,
+                status: { in: ["SCHEDULED", "IN_PROGRESS", "COMPLETED"] },
+                startTime: { gte: weekStart, lt: weekEnd },
+              },
+              select: { startTime: true, endTime: true },
+            }),
+            tx.proposedSession.findMany({
+              where: {
+                clientId: client.id,
+                authorizationId,
+                status: { in: ["PENDING", "APPROVED"] },
+                sessionId: null,
+                startTime: { gte: weekStart, lt: weekEnd },
+              },
+              select: { startTime: true, endTime: true },
+            }),
+          ]);
 
-          const existingHours = sessions.reduce((total, s) => {
-            return total + (s.endTime.getTime() - s.startTime.getTime()) / (1000 * 60 * 60);
-          }, 0);
+          const sumHours = (arr: Array<{ startTime: Date; endTime: Date }>) =>
+            arr.reduce(
+              (total, s) => total + (s.endTime.getTime() - s.startTime.getTime()) / (1000 * 60 * 60),
+              0,
+            );
+          const existingHours = sumHours(sessions) + sumHours(proposals);
 
           const newHours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
 

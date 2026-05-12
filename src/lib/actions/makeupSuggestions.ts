@@ -2,7 +2,8 @@
 
 import { getMakeupSuggestions } from "@/lib/queries/makeupSuggestions";
 import type { MakeupSuggestionsResult, MakeupSuggestion } from "@/lib/queries/makeupSuggestions";
-import { bookSession } from "@/lib/actions/sessions";
+import { bookSession, rescheduleSession } from "@/lib/actions/sessions";
+import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
 export async function fetchMakeupSuggestions(
@@ -40,6 +41,60 @@ export async function bookMakeupSession(
   }
 
   const durationMins = Math.min(cancelledDurationMins, suggestion.availableMinutes);
+
+  // EXTEND_LATER / START_EARLIER are not new sessions — they lengthen an
+  // existing same-day session for this client+provider. Inserting a new
+  // session would either overlap or create a confusing duplicate block.
+  if (suggestion.type === "EXTEND_LATER" || suggestion.type === "START_EARLIER") {
+    if (!suggestion.anchorTime) {
+      return { success: false, error: "Suggestion is missing the existing-session anchor time." };
+    }
+    const anchorUtc = toUtcDate(suggestion.dateStr, suggestion.anchorTime);
+
+    // Find the existing session whose boundary matches the anchor.
+    // EXTEND_LATER: anchor = existing endTime. START_EARLIER: anchor = existing startTime.
+    const existing = await prisma.session.findFirst({
+      where: {
+        clientId,
+        providerId: suggestion.providerId,
+        status: { in: ["SCHEDULED", "IN_PROGRESS"] },
+        ...(suggestion.type === "EXTEND_LATER"
+          ? { endTime: anchorUtc }
+          : { startTime: anchorUtc }),
+      },
+      select: { id: true, startTime: true, endTime: true },
+    });
+
+    if (!existing) {
+      return {
+        success: false,
+        error: "Could not find the existing session to extend. It may have been rescheduled or cancelled.",
+      };
+    }
+
+    const newStart =
+      suggestion.type === "START_EARLIER"
+        ? new Date(existing.startTime.getTime() - durationMins * 60_000)
+        : existing.startTime;
+    const newEnd =
+      suggestion.type === "EXTEND_LATER"
+        ? new Date(existing.endTime.getTime() + durationMins * 60_000)
+        : existing.endTime;
+
+    const reschedResult = await rescheduleSession(existing.id, {
+      startTime: newStart,
+      endTime: newEnd,
+    });
+
+    if (!reschedResult.success) {
+      return { success: false, error: reschedResult.error };
+    }
+
+    revalidatePath("/schedule");
+    return { success: true };
+  }
+
+  // NEW_SESSION — original path.
   const startTime = toUtcDate(suggestion.dateStr, suggestion.windowStart);
   const endTime = new Date(startTime.getTime() + durationMins * 60_000);
 

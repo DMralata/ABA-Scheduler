@@ -146,7 +146,11 @@ export async function getClientSessionOverlap(
 
 // Sum of billable hours for a client against a specific authorization in a given week.
 // Scoped to authorizationId so different service codes are tracked independently.
-// Uses SESSION_BILLABLE_STATUSES — cancelled sessions never happened and don't consume budget.
+// Counts both confirmed sessions (SESSION_BILLABLE_STATUSES) AND in-flight
+// PENDING/APPROVED proposals that have not yet been converted to sessions
+// (sessionId IS NULL). Counting in-flight proposals is what keeps manual booking
+// from accidentally pushing the client over their weekly cap when the scheduler
+// has already earmarked hours that haven't been formally accepted yet.
 export async function getClientBillableHoursForWeek(
   clientId: string,
   authorizationId: string,
@@ -154,23 +158,37 @@ export async function getClientBillableHoursForWeek(
   weekEnd: Date,
   excludeSessionId?: string
 ): Promise<number> {
-  const sessions = await prisma.session.findMany({
-    where: {
-      clientId,
-      authorizationId,
-      billable: true,
-      status: { in: SESSION_BILLABLE_STATUSES },
-      id: excludeSessionId ? { not: excludeSessionId } : undefined,
-      // Overlap logic: catches sessions spanning the week boundary
-      AND: [{ startTime: { lt: weekEnd } }, { endTime: { gt: weekStart } }],
-    },
-    select: { startTime: true, endTime: true },
-  });
+  const [sessions, proposals] = await Promise.all([
+    prisma.session.findMany({
+      where: {
+        clientId,
+        authorizationId,
+        billable: true,
+        status: { in: SESSION_BILLABLE_STATUSES },
+        id: excludeSessionId ? { not: excludeSessionId } : undefined,
+        // Overlap logic: catches sessions spanning the week boundary
+        AND: [{ startTime: { lt: weekEnd } }, { endTime: { gt: weekStart } }],
+      },
+      select: { startTime: true, endTime: true },
+    }),
+    prisma.proposedSession.findMany({
+      where: {
+        clientId,
+        authorizationId,
+        status: { in: ["PENDING", "APPROVED"] },
+        sessionId: null, // skip proposals already turned into sessions (counted above)
+        AND: [{ startTime: { lt: weekEnd } }, { endTime: { gt: weekStart } }],
+      },
+      select: { startTime: true, endTime: true },
+    }),
+  ]);
 
-  return sessions.reduce((total, s) => {
-    const hours = (s.endTime.getTime() - s.startTime.getTime()) / (1000 * 60 * 60);
-    return total + hours;
-  }, 0);
+  const sumHours = (arr: Array<{ startTime: Date; endTime: Date }>) =>
+    arr.reduce(
+      (total, s) => total + (s.endTime.getTime() - s.startTime.getTime()) / (1000 * 60 * 60),
+      0,
+    );
+  return sumHours(sessions) + sumHours(proposals);
 }
 
 // Billable hours used this week per authorization, as a map of authorizationId → hours.
