@@ -371,16 +371,22 @@ export async function POST(request: NextRequest) {
     providerWeeklyHoursMap[s.providerId] = (providerWeeklyHoursMap[s.providerId] ?? 0) + hrs;
   }
 
-  // Add hours from PENDING/APPROVED proposals on other days of this week to usedHoursMap.
-  // Auto Complete deletes proposals for the target day only, so proposals on Mon/Tue/Thu/Fri
-  // are invisible to getWeeklyHoursMap (which reads the Session table, not ProposedSession).
-  // Without this, each day's run sees 0 used hours and proposes a full day's worth, causing
-  // total weekly proposals to exceed the client's authorized limit.
+  // Add hours from PENDING proposals on other days of this week to usedHoursMap.
+  // Auto Complete deletes proposals for the target day only, so PENDING proposals
+  // on Mon/Tue/Thu/Fri are invisible to getWeeklyHoursMap (which reads the Session
+  // table, not ProposedSession). Without this, each day's run sees 0 used hours
+  // and proposes a full day's worth, causing total weekly proposals to exceed
+  // the client's authorized limit.
+  //
+  // APPROVED proposals are intentionally NOT included here: every APPROVED
+  // proposal has a backing Session (created at approve time, scheduler.ts:114)
+  // which getWeeklyHoursMap already counts via SESSION_BILLABLE_STATUSES.
+  // Counting APPROVED proposals here would double-count those hours.
   if (authorizationIds.length > 0) {
     const otherDayProposals = await prisma.proposedSession.findMany({
       where: {
         authorizationId: { in: authorizationIds },
-        status: { in: ["PENDING", "APPROVED"] },
+        status: "PENDING",
         startTime: { gte: weekStart, lt: weekEnd },
         NOT: { AND: [{ startTime: { gte: targetDayStart } }, { startTime: { lt: targetDayEnd } }] },
       },

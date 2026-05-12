@@ -56,6 +56,19 @@ export async function cancelSession(
     },
   });
 
+  // Cancel the backing ProposedSession (if any). Without this, the proposal
+  // keeps status=APPROVED with its original authorizationId, and the auto
+  // scheduler's otherDayProposals query smuggles its hours right back into
+  // usedHoursThisWeek — making the cancelled hours appear still consumed.
+  await prisma.proposedSession.updateMany({
+    where: { sessionId, status: "APPROVED" },
+    data: {
+      status: "REJECTED",
+      rejectionReason: "Session cancelled",
+      rejectedAt: new Date(),
+    },
+  });
+
   await writeAuditLog({
     action: "UPDATE",
     resourceType: "Session",
@@ -138,20 +151,43 @@ export async function cancelRestOfDay(
   const whereFilter =
     party === "PROVIDER" ? { providerId: partyId } : { clientId: partyId };
 
-  const cancelled = await prisma.session.updateMany({
+  // Capture the IDs of sessions about to be cancelled so we can clean up
+  // their backing ProposedSessions afterwards (Prisma's updateMany doesn't
+  // return affected IDs).
+  const toCancel = await prisma.session.findMany({
     where: {
       ...whereFilter,
       status: { in: ["SCHEDULED", "IN_PROGRESS"] },
       startTime: { gte: session.startTime, lt: dayEndBound },
     },
+    select: { id: true },
+  });
+  const toCancelIds = toCancel.map((s) => s.id);
+
+  const cancelled = await prisma.session.updateMany({
+    where: { id: { in: toCancelIds } },
     data: {
       status: "CANCELLED",
       cancelledBy: party,
       cancellationReason: `${party === "PROVIDER" ? "Provider" : "Client"} cancelled rest of day`,
       billable: false,
+      authorizationId: null,
       ...(cancellationType ? { sessionTypeId: cancellationType.id } : {}),
     },
   });
+
+  // Cancel backing ProposedSessions so their hours don't keep counting toward
+  // the client's authorization budget (see cancelSession for the full reason).
+  if (toCancelIds.length > 0) {
+    await prisma.proposedSession.updateMany({
+      where: { sessionId: { in: toCancelIds }, status: "APPROVED" },
+      data: {
+        status: "REJECTED",
+        rejectionReason: "Session cancelled (rest of day)",
+        rejectedAt: new Date(),
+      },
+    });
+  }
 
   const timeParts = new Intl.DateTimeFormat("en-US", {
     timeZone: tz,
