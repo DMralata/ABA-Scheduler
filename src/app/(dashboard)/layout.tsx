@@ -27,7 +27,7 @@ export default async function DashboardLayout({
       userName={userName}
       userPosition={userPosition}
     >
-      <div className="p-8">{children}</div>
+      {children}
     </DashboardShell>
   );
 }

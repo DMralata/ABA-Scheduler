@@ -481,7 +481,7 @@ export function ScheduleWorkspace({ clients, providers, sessionTypes, centers, c
   };
 
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 4rem)" }}>
+    <div className="flex flex-col" style={{ height: "100vh" }}>
       {/* ── Slim toolbar ─────────────────────────────────────────────────────── */}
       <div style={{
         height: 56, display: "flex", alignItems: "center", gap: 14,
