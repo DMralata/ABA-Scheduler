@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { InboundMessageStatus } from "@prisma/client";
+import { getClientNameMasker } from "@/lib/maskClient";
 
 // Normalize a phone number to E.164 digits-only for comparison
 function normalizePhone(phone: string): string {
@@ -26,10 +27,11 @@ export async function resolvePhoneNumber(phoneNumber: string): Promise<{
     (c) => c.phoneNumber && normalizePhone(c.phoneNumber) === normalized
   );
   if (matchedClient) {
+    const mask = await getClientNameMasker();
     return {
       clientId: matchedClient.id,
       providerId: null,
-      name: `${matchedClient.firstName} ${matchedClient.lastName}`,
+      name: `${mask(matchedClient.firstName)} ${mask(matchedClient.lastName)}`,
     };
   }
 
@@ -60,7 +62,7 @@ export async function getInboxMessages(params: {
 }) {
   const where = params.status ? { status: params.status } : {};
 
-  const [messages, total] = await Promise.all([
+  const [messages, total, mask] = await Promise.all([
     prisma.inboundMessage.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -76,9 +78,15 @@ export async function getInboxMessages(params: {
       },
     }),
     prisma.inboundMessage.count({ where }),
+    getClientNameMasker(),
   ]);
 
-  return { messages, total };
+  const masked = messages.map((m) =>
+    m.client
+      ? { ...m, client: { ...m.client, firstName: mask(m.client.firstName), lastName: mask(m.client.lastName) } }
+      : m,
+  );
+  return { messages: masked, total };
 }
 
 // ─── Thread-based inbox ──────────────────────────────────────────────────────
@@ -110,13 +118,16 @@ function getThreadKey(msg: {
 }
 
 export async function getThreads(): Promise<ThreadSummary[]> {
-  const messages = await prisma.inboundMessage.findMany({
-    orderBy: { receivedAt: "desc" },
-    include: {
-      client: { select: { id: true, firstName: true, lastName: true } },
-      provider: { select: { id: true, firstName: true, lastName: true } },
-    },
-  });
+  const [messages, mask] = await Promise.all([
+    prisma.inboundMessage.findMany({
+      orderBy: { receivedAt: "desc" },
+      include: {
+        client: { select: { id: true, firstName: true, lastName: true } },
+        provider: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+    getClientNameMasker(),
+  ]);
 
   const threadMap = new Map<string, ThreadSummary>();
 
@@ -125,7 +136,7 @@ export async function getThreads(): Promise<ThreadSummary[]> {
 
     if (!threadMap.has(key)) {
       const senderName = msg.client
-        ? `${msg.client.firstName} ${msg.client.lastName}`
+        ? `${mask(msg.client.firstName)} ${mask(msg.client.lastName)}`
         : msg.provider
         ? `${msg.provider.firstName} ${msg.provider.lastName}`
         : msg.fromName
@@ -167,26 +178,43 @@ export async function getThreadMessages(threadKey: string) {
     where = { fromNumber: threadKey.slice("from:".length) };
   }
 
-  return prisma.inboundMessage.findMany({
-    where,
-    orderBy: { receivedAt: "asc" },
-    include: {
-      client: { select: { id: true, firstName: true, lastName: true } },
-      provider: { select: { id: true, firstName: true, lastName: true } },
-      outboundMessages: { orderBy: { createdAt: "asc" } },
-    },
-  });
+  const [rows, mask] = await Promise.all([
+    prisma.inboundMessage.findMany({
+      where,
+      orderBy: { receivedAt: "asc" },
+      include: {
+        client: { select: { id: true, firstName: true, lastName: true } },
+        provider: { select: { id: true, firstName: true, lastName: true } },
+        outboundMessages: { orderBy: { createdAt: "asc" } },
+      },
+    }),
+    getClientNameMasker(),
+  ]);
+
+  return rows.map((m) =>
+    m.client
+      ? { ...m, client: { ...m.client, firstName: mask(m.client.firstName), lastName: mask(m.client.lastName) } }
+      : m,
+  );
 }
 
 export async function getMessageById(id: string) {
-  return prisma.inboundMessage.findUnique({
-    where: { id },
-    include: {
-      client: { select: { id: true, firstName: true, lastName: true } },
-      provider: { select: { id: true, firstName: true, lastName: true } },
-      outboundMessages: { orderBy: { createdAt: "asc" } },
-    },
-  });
+  const [row, mask] = await Promise.all([
+    prisma.inboundMessage.findUnique({
+      where: { id },
+      include: {
+        client: { select: { id: true, firstName: true, lastName: true } },
+        provider: { select: { id: true, firstName: true, lastName: true } },
+        outboundMessages: { orderBy: { createdAt: "asc" } },
+      },
+    }),
+    getClientNameMasker(),
+  ]);
+  if (!row || !row.client) return row;
+  return {
+    ...row,
+    client: { ...row.client, firstName: mask(row.client.firstName), lastName: mask(row.client.lastName) },
+  };
 }
 
 export async function getDraftOutboundMessages(inboundMessageId: string) {

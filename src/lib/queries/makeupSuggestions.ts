@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getWeekBoundaries } from "@/lib/utils";
 import type { DayOfWeek } from "@prisma/client";
+import { getClientNameMasker } from "@/lib/maskClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -131,6 +132,8 @@ export async function getMakeupSuggestions(
 
   if (!session?.client || !session.clientId) return null;
   const client = session.client;
+  const maskClient = await getClientNameMasker();
+  const maskedClientName = `${maskClient(client.firstName)} ${maskClient(client.lastName)}`;
   const timezone = session.timezone ?? client.center?.timezone ?? "America/New_York";
   const cancelledDurationMins = Math.round((session.endTime.getTime() - session.startTime.getTime()) / 60_000);
 
@@ -206,7 +209,7 @@ export async function getMakeupSuggestions(
 
   if (remainingDays.length === 0) {
     return {
-      clientName: `${client.firstName} ${client.lastName}`,
+      clientName: maskedClientName,
       clientId: client.id,
       cancelledHours,
       cancelledDurationMins,

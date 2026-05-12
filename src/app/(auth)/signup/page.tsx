@@ -4,7 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
+const POSITIONS = ["Manager", "BCBA", "Scheduler"] as const;
+
 export default function SignupPage() {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [position, setPosition] = useState<string>("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -27,7 +32,7 @@ export default function SignupPage() {
       res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, firstName, lastName, position }),
       });
     } catch (err) {
       setError(
@@ -162,6 +167,84 @@ export default function SignupPage() {
               {error}
             </div>
           )}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <label
+                htmlFor="firstName"
+                style={{
+                  display: "block",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--ata-gray-700)",
+                  marginBottom: 6,
+                }}
+              >
+                First name
+              </label>
+              <input
+                id="firstName"
+                type="text"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                required
+                autoComplete="given-name"
+                className="ata-input"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="lastName"
+                style={{
+                  display: "block",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--ata-gray-700)",
+                  marginBottom: 6,
+                }}
+              >
+                Last name
+              </label>
+              <input
+                id="lastName"
+                type="text"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                required
+                autoComplete="family-name"
+                className="ata-input"
+              />
+            </div>
+          </div>
+          <div>
+            <label
+              htmlFor="position"
+              style={{
+                display: "block",
+                fontSize: 13,
+                fontWeight: 600,
+                color: "var(--ata-gray-700)",
+                marginBottom: 6,
+              }}
+            >
+              Position
+            </label>
+            <select
+              id="position"
+              value={position}
+              onChange={(e) => setPosition(e.target.value)}
+              required
+              className="ata-input"
+            >
+              <option value="" disabled>
+                Select your position
+              </option>
+              {POSITIONS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
           <div>
             <label
               htmlFor="email"

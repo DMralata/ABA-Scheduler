@@ -7,14 +7,35 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const body = (await request.json().catch(() => null)) as {
     email?: string;
     password?: string;
+    firstName?: string;
+    lastName?: string;
+    position?: string;
   } | null;
 
   const email = body?.email?.trim().toLowerCase();
   const password = body?.password;
+  const firstName = body?.firstName?.trim();
+  const lastName = body?.lastName?.trim();
+  const position = body?.position?.trim();
 
   if (!email || !password) {
     return NextResponse.json(
       { error: "Email and password are required." },
+      { status: 400 },
+    );
+  }
+
+  if (!firstName || !lastName) {
+    return NextResponse.json(
+      { error: "First name and last name are required." },
+      { status: 400 },
+    );
+  }
+
+  const ALLOWED_POSITIONS = ["Manager", "BCBA", "Scheduler"];
+  if (!position || !ALLOWED_POSITIONS.includes(position)) {
+    return NextResponse.json(
+      { error: "Position must be Manager, BCBA, or Scheduler." },
       { status: 400 },
     );
   }
@@ -53,6 +74,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       email,
       password,
       email_confirm: true,
+      user_metadata: {
+        first_name: firstName,
+        last_name: lastName,
+        full_name: `${firstName} ${lastName}`,
+        position,
+      },
     });
 
     if (error) {

@@ -14,6 +14,7 @@ import { schoolOriginIdFor, schoolToCenterDistance } from "@/lib/scheduler/schoo
 import { getWeekBoundaries } from "@/lib/utils";
 import type { SchedulerClient, SchedulerProvider } from "@/lib/scheduler/types";
 import { getWeeklyHoursMap, getClientAvgWeeklyCancellationHours, SESSION_CONFLICT_STATUSES, SESSION_BILLABLE_STATUSES } from "@/lib/queries/sessions";
+import { getClientNameMasker } from "@/lib/maskClient";
 
 export async function POST(request: NextRequest) {
   // Auth check — must be logged in
@@ -417,6 +418,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Build schedulerClients now that bookedByClient is available
+  const maskClientName = await getClientNameMasker();
   const schedulerClients: SchedulerClient[] = rawClients.map((c) => {
     const authInfo = clientAuthMap[c.id];
     const weeklyHours = authInfo?.weeklyHours ?? null;
@@ -425,8 +427,8 @@ export async function POST(request: NextRequest) {
       : null;
     return {
       id: c.id,
-      firstName: c.firstName,
-      lastName: c.lastName,
+      firstName: maskClientName(c.firstName),
+      lastName: maskClientName(c.lastName),
       latitude: c.latitude,
       longitude: c.longitude,
       daysNeeded: 1, // day-by-day mode always schedules one session per run

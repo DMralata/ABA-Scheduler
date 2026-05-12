@@ -7,6 +7,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { getDriveTimeMatrix } from "@/lib/scheduler/maps";
 import { getSessionTypeColor, getSessionTypeAccent, DRIVE_TIME_COLOR } from "@/lib/utils";
+import { getClientNameMasker } from "@/lib/maskClient";
 
 export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
@@ -26,6 +27,8 @@ export async function GET(request: NextRequest) {
   );
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const maskClient = await getClientNameMasker();
 
   const { searchParams } = request.nextUrl;
   const start = searchParams.get("start");
@@ -112,7 +115,7 @@ export async function GET(request: NextRequest) {
     return {
       id: s.id,
       title: isDriveTime ? "Drive Time" : (s.client
-        ? `${s.client.lastName}, ${s.client.firstName}`
+        ? `${maskClient(s.client.lastName)}, ${maskClient(s.client.firstName)}`
         : s.provider.lastName + ", " + s.provider.firstName),
       start: s.startTime.toISOString(),
       end: s.endTime.toISOString(),
@@ -125,7 +128,7 @@ export async function GET(request: NextRequest) {
         sessionTypeId: s.sessionTypeId,
         sessionTypeName: s.sessionType.name,
         clientId: s.clientId,
-        clientName: s.client ? `${s.client.firstName} ${s.client.lastName}` : null,
+        clientName: s.client ? `${maskClient(s.client.firstName)} ${maskClient(s.client.lastName)}` : null,
         clientAddress: s.client && s.locationType === "HOME"
           ? [s.client.street, s.client.city, s.client.state, s.client.zip].filter(Boolean).join(", ") || null
           : null,
@@ -147,7 +150,7 @@ export async function GET(request: NextRequest) {
     const accentColor = getSessionTypeAccent(p.sessionType.name);
     return {
       id: `proposal-${p.id}`,
-      title: `[Proposed] ${p.client.lastName}, ${p.client.firstName}`,
+      title: `[Proposed] ${maskClient(p.client.lastName)}, ${maskClient(p.client.firstName)}`,
       start: p.startTime.toISOString(),
       end: p.endTime.toISOString(),
       backgroundColor: color + "66", // 40% opacity
@@ -159,7 +162,7 @@ export async function GET(request: NextRequest) {
         sessionTypeId: p.sessionTypeId,
         sessionTypeName: p.sessionType.name,
         clientId: p.clientId,
-        clientName: `${p.client.firstName} ${p.client.lastName}`,
+        clientName: `${maskClient(p.client.firstName)} ${maskClient(p.client.lastName)}`,
         clientAddress: null,
         locationType: p.locationType ?? "CENTER",
         providerId: p.providerId,
@@ -243,7 +246,7 @@ export async function GET(request: NextRequest) {
           fromLat: fromLatV,
           fromLng: fromLngV,
           clientId: s.clientId,
-          clientName: s.client ? `${s.client.lastName}, ${s.client.firstName}` : null,
+          clientName: s.client ? `${maskClient(s.client.lastName)}, ${maskClient(s.client.firstName)}` : null,
           clientAddress: s.client ? formatAddress([s.client.street, s.client.city, s.client.state, s.client.zip]) : null,
           clientLat: s.client?.latitude ?? null,
           clientLng: s.client?.longitude ?? null,
@@ -273,7 +276,7 @@ export async function GET(request: NextRequest) {
           fromLat: isHome ? (p.client?.latitude ?? null) : isSchool ? schoolLat : (centerLat ?? prov?.latitude ?? null),
           fromLng: isHome ? (p.client?.longitude ?? null) : isSchool ? schoolLng : (centerLng ?? prov?.longitude ?? null),
           clientId: p.clientId,
-          clientName: `${p.client.lastName}, ${p.client.firstName}`,
+          clientName: `${maskClient(p.client.lastName)}, ${maskClient(p.client.firstName)}`,
           clientAddress: formatAddress([p.client.street, p.client.city, p.client.state, p.client.zip]),
           clientLat: p.client?.latitude ?? null,
           clientLng: p.client?.longitude ?? null,

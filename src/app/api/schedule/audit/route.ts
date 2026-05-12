@@ -15,6 +15,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { getWeekBoundaries } from "@/lib/utils";
 import type { DayOfWeek } from "@prisma/client";
+import { getClientNameMasker } from "@/lib/maskClient";
 
 const WEEKDAYS: DayOfWeek[] = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"];
 
@@ -104,8 +105,17 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
+  const maskClientName = await getClientNameMasker();
+  // Apply name masking once for the blinded viewer so downstream label strings inherit it.
+  for (const c of centerClients) {
+    c.firstName = maskClientName(c.firstName);
+    c.lastName = maskClientName(c.lastName);
+  }
+
   const providerIds = centerProviders.map((p) => p.id);
   const clientIds = centerClients.map((c) => c.id);
+  // Cache mask results by id so we can apply the same names to nested client objects below.
+  const clientMaskById = new Map(centerClients.map((c) => [c.id, { firstName: c.firstName, lastName: c.lastName }]));
 
   const [weekSessions, weekProposals] = await Promise.all([
     prisma.session.findMany({
@@ -148,6 +158,21 @@ export async function GET(request: NextRequest) {
       },
     }),
   ]);
+
+  // Apply masking to nested client refs on each session so downstream label
+  // builders (Pass 1 compliance, Pass 4 travel) emit masked names.
+  for (const s of weekSessions) {
+    if (s.client) {
+      const m = s.clientId ? clientMaskById.get(s.clientId) : null;
+      if (m) {
+        s.client.firstName = m.firstName;
+        s.client.lastName = m.lastName;
+      } else {
+        s.client.firstName = maskClientName(s.client.firstName);
+        s.client.lastName = maskClientName(s.client.lastName);
+      }
+    }
+  }
 
   // ── PASS 1: COMPLIANCE ─────────────────────────────────────────────────────
   type Violation = {

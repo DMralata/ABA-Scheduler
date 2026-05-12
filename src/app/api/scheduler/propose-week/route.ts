@@ -23,6 +23,7 @@ import { schoolOriginIdFor, schoolToCenterDistance } from "@/lib/scheduler/schoo
 import { getWeekBoundaries } from "@/lib/utils";
 import type { SchedulerClient, SchedulerProvider } from "@/lib/scheduler/types";
 import { getWeeklyHoursMap, getClientAvgWeeklyCancellationHours, SESSION_CONFLICT_STATUSES, SESSION_BILLABLE_STATUSES } from "@/lib/queries/sessions";
+import { getClientNameMasker } from "@/lib/maskClient";
 
 // Maximum session length per day. Clients with more weekly auth than this get multiple
 // sessions per week rather than one marathon session.
@@ -293,6 +294,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Build scheduler input ────────────────────────────────────────────────────
+  const maskClientName = await getClientNameMasker();
   const schedulerClients: SchedulerClient[] = rawClients.map((c) => {
     const authInfo = clientAuthMap[c.id];
     const weeklyHours = authInfo?.weeklyHours ?? null;
@@ -325,8 +327,8 @@ export async function POST(request: NextRequest) {
 
     return {
       id: c.id,
-      firstName: c.firstName,
-      lastName: c.lastName,
+      firstName: maskClientName(c.firstName),
+      lastName: maskClientName(c.lastName),
       latitude: c.latitude,
       longitude: c.longitude,
       sessionHours,

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { SessionStatus } from "@prisma/client";
+import { getClientNameMasker } from "@/lib/maskClient";
 
 // ─── Scheduling Status Constants ─────────────────────────────────────────────
 // CANCELLED sessions are ALWAYS invisible to the scheduler.
@@ -221,23 +222,26 @@ export type DashboardSession = {
 };
 
 export async function getDashboardSessions(from: Date): Promise<DashboardSession[]> {
-  const rows = await prisma.session.findMany({
-    where: { startTime: { gte: from } },
-    select: {
-      startTime: true,
-      endTime: true,
-      billable: true,
-      status: true,
-      locationType: true,
-      providerId: true,
-      cancelledBy: true,
-      cancellationReason: true,
-      sessionType: { select: { name: true } },
-      client: { select: { firstName: true, lastName: true } },
-      provider: { select: { firstName: true, lastName: true, position: true } },
-    },
-    orderBy: { startTime: "asc" },
-  });
+  const [rows, mask] = await Promise.all([
+    prisma.session.findMany({
+      where: { startTime: { gte: from } },
+      select: {
+        startTime: true,
+        endTime: true,
+        billable: true,
+        status: true,
+        locationType: true,
+        providerId: true,
+        cancelledBy: true,
+        cancellationReason: true,
+        sessionType: { select: { name: true } },
+        client: { select: { firstName: true, lastName: true } },
+        provider: { select: { firstName: true, lastName: true, position: true } },
+      },
+      orderBy: { startTime: "asc" },
+    }),
+    getClientNameMasker(),
+  ]);
 
   return rows.map((s) => ({
     startTime: s.startTime,
@@ -247,7 +251,7 @@ export async function getDashboardSessions(from: Date): Promise<DashboardSession
     sessionTypeName: s.sessionType.name,
     locationType: s.locationType,
     providerId: s.providerId,
-    clientName: s.client ? `${s.client.lastName}, ${s.client.firstName}` : null,
+    clientName: s.client ? `${mask(s.client.lastName)}, ${mask(s.client.firstName)}` : null,
     providerName: s.provider ? `${s.provider.lastName}, ${s.provider.firstName}` : null,
     providerPosition: s.provider?.position ?? null,
     cancelledBy: s.cancelledBy as "CLIENT" | "PROVIDER" | null,
