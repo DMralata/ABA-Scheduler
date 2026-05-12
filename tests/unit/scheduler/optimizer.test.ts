@@ -204,8 +204,8 @@ describe("skip reasons", () => {
 // ─── Client Priority Ordering ─────────────────────────────────────────────────
 
 describe("client priority ordering", () => {
-  it("schedules the client with the most remaining authorized hours first", () => {
-    // c2 has more remaining hours — should be processed first and get the only provider slot.
+  it("schedules the client closest to their weekly cap first", () => {
+    // c1 has fewer remaining hours — process first to lock them in before their window closes.
     const c1 = makeClient({ id: "c1", lastName: "Alpha", approvedWeeklyHours: 5,  usedHoursThisWeek: 2 }); // 3h remaining
     const c2 = makeClient({ id: "c2", lastName: "Zeta",  approvedWeeklyHours: 10, usedHoursThisWeek: 2 }); // 8h remaining
     // Constrain the provider to exactly one 2-hour window so only one client can be served.
@@ -218,10 +218,10 @@ describe("client priority ordering", () => {
     const { proposals } = optimize(input, createWorkingState());
 
     expect(proposals.length).toBe(1);
-    expect(proposals[0].clientId).toBe("c2");
+    expect(proposals[0].clientId).toBe("c1");
   });
 
-  it("uses alphabetical last name to break ties when remaining hours are equal", () => {
+  it("falls back to client id ordering when all priority fields tie", () => {
     const c1 = makeClient({ id: "c1", lastName: "Mendez" });
     const c2 = makeClient({ id: "c2", lastName: "Adams"  });
     const rbt = makeRbt({ id: "rbt-1" });
@@ -229,7 +229,7 @@ describe("client priority ordering", () => {
 
     const { proposals } = optimize(input, createWorkingState());
 
-    // Adams comes first alphabetically — should get the slot
-    expect(proposals[0].clientId).toBe("c2");
+    // Final tiebreaker is client.id ascending → c1 wins.
+    expect(proposals[0].clientId).toBe("c1");
   });
 });

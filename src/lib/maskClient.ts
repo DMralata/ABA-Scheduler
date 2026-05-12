@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { isBlindedViewer } from "@/lib/auth";
 
 // Mask format: first 3 chars + asterisks padded to length 5.
@@ -12,8 +13,9 @@ const identity = (s: string | null | undefined): string => s ?? "";
 export type NameMasker = (s: string | null | undefined) => string;
 
 // Resolves once per request whether the current viewer is blinded.
-// Callers should await this once and then apply the returned function synchronously.
-export async function getClientNameMasker(): Promise<NameMasker> {
+// React `cache` dedupes the underlying Supabase auth call across all query
+// callers within the same request, so we don't pay a network round-trip per query.
+export const getClientNameMasker = cache(async (): Promise<NameMasker> => {
   const blinded = await isBlindedViewer();
   return blinded ? maskName : identity;
-}
+});
