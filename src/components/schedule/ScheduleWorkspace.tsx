@@ -358,9 +358,10 @@ export function ScheduleWorkspace({ clients, providers, sessionTypes, centers, c
     if (!centerId) { setAutoMessage("No center configured."); setClearWeekState("idle"); return; }
     setClearWeekState("clearing");
     setAutoMessage(null); setAutoSkips([]); setAutoUnserved([]); setAutoWarnings([]); setAutoDialogOpen(false); setUndoDays([]);
-    const { dayStart: todayStart } = computeDayBoundaries(centerNoon(timezone), timezone);
+    // Cutoff is "now" to the second, not midnight of today — past/in-progress
+    // sessions must not be cleared. For future weeks, start from Monday.
     const { dayStart: mondayStart } = computeDayBoundaries(weekDates[0], timezone);
-    const fromDate = new Date(Math.max(todayStart.getTime(), mondayStart.getTime()));
+    const fromDate = new Date(Math.max(Date.now(), mondayStart.getTime()));
     const { dayEnd: weekEnd } = computeDayBoundaries(weekDates[4], timezone);
     clearWeekProposals(fromDate, weekEnd, centerId)
       .then(result => {

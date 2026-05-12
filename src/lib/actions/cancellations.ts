@@ -117,7 +117,23 @@ export async function cancelRestOfDay(
     day: "2-digit",
   }).format(session.startTime);
 
-  const dayEndBound = new Date(session.startTime.getTime() + 24 * 60 * 60 * 1000);
+  // Bound the cancellation window to end-of-day in the resolved timezone so it
+  // never bleeds into the next local day. (A naive +24h offset from startTime
+  // crossed midnight when the session began later in the day.)
+  const noonUTC = new Date(`${localDateStr}T12:00:00Z`);
+  const offsetParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(noonUTC);
+  const offH = parseInt(offsetParts.find((p) => p.type === "hour")?.value ?? "12", 10);
+  const offM = parseInt(offsetParts.find((p) => p.type === "minute")?.value ?? "0", 10);
+  const offS = parseInt(offsetParts.find((p) => p.type === "second")?.value ?? "0", 10);
+  const offsetMs = (offH === 24 ? 0 : offH) * 3_600_000 + offM * 60_000 + offS * 1_000;
+  const localDayStart = new Date(noonUTC.getTime() - offsetMs);
+  const dayEndBound = new Date(localDayStart.getTime() + 24 * 3_600_000);
 
   const whereFilter =
     party === "PROVIDER" ? { providerId: partyId } : { clientId: partyId };
