@@ -40,7 +40,7 @@ export interface SchedulerClient {
   // When false (vacation, new client, etc.) history rank is skipped so preferred slot takes over.
   hasPriorWeekHistory: boolean;
   // Where this client receives therapy — determines session type and approved-provider enforcement
-  preferredLocation: "HOME" | "CENTER" | "HYBRID" | "SCHOOL";
+  preferredLocation: "HOME" | "CENTER" | "HYBRID" | "SCHOOL" | "DAYCARE";
   // Preferred day+time slots — scheduler uses these as a near-lock filter when available.
   // If any candidate slot matches a preferred day+startTime, only those slots are considered.
   // Silent fallback to all slots when no preferred slot is available.
@@ -62,7 +62,7 @@ export interface SchedulerProvider {
   // clientId is populated for therapy sessions — used to look up client→client drive times.
   // Absent (undefined) for non-client sessions like Drive Time, Admin, etc.
   // locationType is set for therapy sessions so HOME→CENTER gap enforcement can filter by type.
-  bookedWindows: Array<{ dayOfWeek: DayOfWeek; startTime: string; endTime: string; clientId?: string; locationType?: "HOME" | "CENTER" | "HYBRID" | "SCHOOL" }>;
+  bookedWindows: Array<{ dayOfWeek: DayOfWeek; startTime: string; endTime: string; clientId?: string; locationType?: "HOME" | "CENTER" | "HYBRID" | "SCHOOL" | "DAYCARE" }>;
   // One-off date blocks for the target week — date is "YYYY-MM-DD" in center timezone
   blocks: Array<{ date: string; startTime: string; endTime: string }>;
   // Total billable hours already in the DB for this provider this week (across all prior days).
@@ -158,7 +158,7 @@ export interface BookedSlot {
   startMins: number; // minutes since midnight
   endMins: number;
   clientId: string; // used to look up drive time between consecutive sessions
-  locationType?: "HOME" | "CENTER" | "HYBRID" | "SCHOOL"; // used to enforce HOME→CENTER drive gap before CENTER slots
+  locationType?: "HOME" | "CENTER" | "HYBRID" | "SCHOOL" | "DAYCARE"; // used to enforce HOME→CENTER drive gap before CENTER slots
 }
 
 // Mutable state accumulated during a single scheduling run.

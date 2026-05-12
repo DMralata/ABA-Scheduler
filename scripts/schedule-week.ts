@@ -196,7 +196,7 @@ async function scheduleDay(dateStr: string, centerId: string) {
   const targetDayStart = new Date(dayNoonUTC.getTime() - dayOffsetMs);
   const targetDayEnd = new Date(targetDayStart.getTime() + 24 * 3_600_000);
 
-  const bookedByProvider: Record<string, Array<{ dayOfWeek: DayOfWeek; startTime: string; endTime: string; clientId?: string; locationType?: "HOME" | "CENTER" | "HYBRID" | "SCHOOL" }>> = {};
+  const bookedByProvider: Record<string, Array<{ dayOfWeek: DayOfWeek; startTime: string; endTime: string; clientId?: string; locationType?: "HOME" | "CENTER" | "HYBRID" | "SCHOOL" | "DAYCARE" }>> = {};
   const bookedByClient: Record<string, Array<{ dayOfWeek: DayOfWeek; startTime: string; endTime: string }>> = {};
 
   for (const session of [...bookedSessions, ...approvedProposals]) {

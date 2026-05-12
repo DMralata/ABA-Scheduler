@@ -57,7 +57,7 @@ export async function bookSession(
   // Validate session type exists and get its service code for authorization matching
   const sessionType = await prisma.sessionType.findUnique({
     where: { id: parsed.data.sessionTypeId },
-    select: { id: true, serviceCode: true, requiresBcba: true },
+    select: { id: true, name: true, serviceCode: true, requiresBcba: true },
   });
   if (!sessionType) {
     return { success: false, error: "Session type not found." };
@@ -89,7 +89,7 @@ export async function bookSession(
     // Drive time gap check — only for HOME or CENTER sessions (not null/unset location types)
     // Mirrors the gap enforcement in the auto-scheduler so manual bookings follow the same rules.
     const locationType = parsed.data.locationType;
-    if (locationType === "HOME" || locationType === "CENTER" || locationType === "SCHOOL") {
+    if (locationType === "HOME" || locationType === "CENTER" || locationType === "SCHOOL" || locationType === "DAYCARE") {
       const center = client.centerId
         ? await prisma.center.findUnique({
             where: { id: client.centerId },
@@ -145,6 +145,7 @@ export async function bookSession(
       endTime,
       billable,
       serviceCode: sessionType.serviceCode,
+      sessionTypeName: sessionType.name,
       timezone,
       locationType: parsed.data.locationType ?? null,
     });
@@ -454,7 +455,7 @@ export async function suggestProviders(input: {
   startTime: Date;
   endTime: Date;
   timezone: string;
-  locationType?: "HOME" | "CENTER" | "SCHOOL";
+  locationType?: "HOME" | "CENTER" | "SCHOOL" | "DAYCARE";
 }): Promise<{ success: true; providers: SuggestedProvider[] } | { success: false; error: string }> {
   const auth = await requireUser();
   if (!auth.ok) return { success: false, error: auth.error };
@@ -619,7 +620,7 @@ export async function rescheduleSession(
   // Load session type to get service code for authorization matching
   const sessionType = await prisma.sessionType.findUnique({
     where: { id: session.sessionTypeId },
-    select: { serviceCode: true },
+    select: { name: true, serviceCode: true },
   });
 
   const provider = await getProviderForValidation(session.providerId);
@@ -638,7 +639,7 @@ export async function rescheduleSession(
     // Drive-time gap check — mirrors bookSession so dragging a session into a
     // new slot doesn't bypass the same drive-buffer rule that booking enforces.
     const locationType = session.locationType;
-    if (locationType === "HOME" || locationType === "CENTER" || locationType === "SCHOOL") {
+    if (locationType === "HOME" || locationType === "CENTER" || locationType === "SCHOOL" || locationType === "DAYCARE") {
       const center = client.centerId
         ? await prisma.center.findUnique({
             where: { id: client.centerId },
@@ -692,6 +693,7 @@ export async function rescheduleSession(
       endTime,
       billable: session.billable,
       serviceCode: sessionType?.serviceCode,
+      sessionTypeName: sessionType?.name,
       timezone,
       excludeSessionId: id,
       locationType: session.locationType ?? null,

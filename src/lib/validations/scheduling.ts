@@ -289,6 +289,14 @@ export type AuthorizationValidationResult =
   | { valid: true; authorizationId: string }
   | { valid: false; reason: string };
 
+// Only direct therapy sessions are gated by authorizations.
+// BCBA supervision, assessment, indirect, and other non-direct-therapy sessions
+// can be booked without an active authorization on file.
+export function isDirectTherapyType(sessionTypeName: string | null | undefined): boolean {
+  if (!sessionTypeName) return false;
+  return sessionTypeName === "Direct Therapy" || sessionTypeName === "Direct Therapy Home";
+}
+
 export async function validateAuthorization(
   clientId: string,
   sessionStart: Date,
@@ -297,10 +305,12 @@ export async function validateAuthorization(
   serviceCode: string | null | undefined,
   authorizations: Authorization[],
   timezone: string,
-  excludeSessionId?: string
+  excludeSessionId?: string,
+  requiresAuthorization: boolean = true
 ): Promise<AuthorizationValidationResult> {
-  if (!billable) {
-    // Non-billable sessions don't need an authorization — return a sentinel value
+  if (!billable || !requiresAuthorization) {
+    // Non-billable sessions and non-direct-therapy sessions don't need an
+    // authorization — return a sentinel value
     return { valid: true, authorizationId: "" };
   }
 
@@ -399,17 +409,21 @@ export async function validateSession(params: {
   endTime: Date;
   billable: boolean;
   serviceCode?: string | null;
+  // Used to gate the active-authorization check: only Direct Therapy / Direct
+  // Therapy Home sessions are checked against client authorizations. BCBA
+  // supervision, assessment, etc. can be booked without an authorization.
+  sessionTypeName?: string | null;
   timezone: string;
   excludeSessionId?: string;
   // Only enforce the approved-provider list for HOME sessions.
   // CENTER sessions allow any qualified, active provider.
-  locationType?: "HOME" | "CENTER" | "HYBRID" | "SCHOOL" | null;
+  locationType?: "HOME" | "CENTER" | "HYBRID" | "SCHOOL" | "DAYCARE" | null;
 }): Promise<{
   failures: ValidationFailure[];
   warnings: ValidationWarning[];
   authorizationId: string | undefined;
 }> {
-  const { client, provider, startTime, endTime, billable, serviceCode, timezone, excludeSessionId, locationType } = params;
+  const { client, provider, startTime, endTime, billable, serviceCode, sessionTypeName, timezone, excludeSessionId, locationType } = params;
 
   const [overlapResult, authorizationResult] = await Promise.all([
     validateNoOverlap(provider.id, client.id, startTime, endTime, excludeSessionId),
@@ -421,7 +435,8 @@ export async function validateSession(params: {
       serviceCode,
       client.authorizations,
       timezone,
-      excludeSessionId
+      excludeSessionId,
+      isDirectTherapyType(sessionTypeName)
     ),
   ]);
 
@@ -511,7 +526,7 @@ export async function validateDriveTimeGap(params: {
   providerId: string;
   newStartTime: Date;
   newEndTime: Date;
-  newLocationType: "HOME" | "CENTER" | "SCHOOL";
+  newLocationType: "HOME" | "CENTER" | "SCHOOL" | "DAYCARE";
   newClientAddress: string | null;
   newClientLat: number | null;
   newClientLng: number | null;

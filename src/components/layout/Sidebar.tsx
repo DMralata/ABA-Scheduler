@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -12,6 +13,7 @@ import {
   Settings as SettingsIcon,
   HelpCircle,
   LogOut,
+  UserCog,
   type LucideIcon,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -52,6 +54,26 @@ export function Sidebar({
   const pathname = usePathname();
   const router = useRouter();
   const compact = variant === "compact";
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onDown(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
 
   async function handleSignOut() {
     const supabase = createClient();
@@ -143,72 +165,135 @@ export function Sidebar({
           <span className="ata-nav-label">Settings</span>
         </Link>
 
-        <button
-          type="button"
-          className="ata-nav-item"
+        <Link
+          href="/help"
+          className={`ata-nav-item ${pathname === "/help" || pathname.startsWith("/help/") ? "ata-nav-item--active" : ""}`}
           aria-label={compact ? "Help" : undefined}
           title={compact ? "Help" : undefined}
         >
           <HelpCircle size={20} strokeWidth={1.8} />
           <span className="ata-nav-label">Help</span>
-        </button>
+        </Link>
 
-        <div className="ata-profile-block">
-          <span className="ata-avatar" aria-hidden>
-            {initials}
-          </span>
-          <div className="ata-profile-copy" style={{ minWidth: 0, flex: 1 }}>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 700,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {userName ?? "Account"}
+        <div ref={menuRef} style={{ position: "relative" }}>
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label="Account menu"
+            title={compact ? userName ?? "Account" : undefined}
+            className="ata-profile-block"
+            style={{
+              width: "100%",
+              background: "transparent",
+              border: 0,
+              padding: 0,
+              cursor: "pointer",
+              textAlign: "left",
+              color: "inherit",
+              font: "inherit",
+            }}
+          >
+            <span className="ata-avatar" aria-hidden>
+              {initials}
+            </span>
+            <div className="ata-profile-copy" style={{ minWidth: 0, flex: 1 }}>
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {userName ?? "Account"}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 12,
+                  color: "rgba(255,255,255,0.72)",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                <span className="ata-online-dot" aria-hidden />
+                {userPosition || "Online"}
+              </div>
             </div>
+          </button>
+
+          {menuOpen && (
             <div
+              role="menu"
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: 12,
-                color: "rgba(255,255,255,0.72)",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              <span className="ata-online-dot" aria-hidden />
-              {userPosition || "Online"}
-            </div>
-          </div>
-          {!compact && (
-            <button
-              type="button"
-              onClick={handleSignOut}
-              aria-label="Sign out"
-              title="Sign out"
-              style={{
-                background: "transparent",
-                border: 0,
-                color: "rgba(255,255,255,0.72)",
+                position: "absolute",
+                bottom: "calc(100% + 8px)",
+                left: 0,
+                right: 0,
+                minWidth: 180,
+                background: "#FFFFFF",
+                color: "var(--ata-gray-900)",
+                borderRadius: 10,
+                boxShadow: "0 12px 32px rgba(0,0,0,0.28)",
                 padding: 6,
-                borderRadius: 8,
-                cursor: "pointer",
-                display: "inline-flex",
+                zIndex: 50,
               }}
             >
-              <LogOut size={16} />
-            </button>
+              <Link
+                href="/profile"
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+                style={menuItemStyle}
+              >
+                <UserCog size={16} />
+                <span>Edit profile</span>
+              </Link>
+              <Link
+                href="/settings"
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+                style={menuItemStyle}
+              >
+                <SettingsIcon size={16} />
+                <span>Settings</span>
+              </Link>
+              <div style={{ height: 1, background: "var(--ata-gray-100)", margin: "4px 0" }} />
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  handleSignOut();
+                }}
+                style={{ ...menuItemStyle, width: "100%", background: "transparent", border: 0, cursor: "pointer", textAlign: "left", font: "inherit" }}
+              >
+                <LogOut size={16} />
+                <span>Sign out</span>
+              </button>
+            </div>
           )}
         </div>
       </div>
     </aside>
   );
 }
+
+const menuItemStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  padding: "8px 10px",
+  borderRadius: 6,
+  fontSize: 13,
+  color: "var(--ata-gray-900)",
+  textDecoration: "none",
+};
 
 function BrandMark({ compact }: { compact: boolean }) {
   if (compact) {

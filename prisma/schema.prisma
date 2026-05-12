@@ -430,6 +430,7 @@ enum LocationType {
   CENTER
   HYBRID
   SCHOOL
+  DAYCARE
 }
 
 enum AuthorizationStatus {

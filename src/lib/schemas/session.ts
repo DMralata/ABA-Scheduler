@@ -9,7 +9,7 @@ export const BookSessionSchema = z.object({
   startTime: z.coerce.date({ required_error: "Start time is required" }),
   endTime: z.coerce.date({ required_error: "End time is required" }),
   billable: z.boolean().default(true),
-  locationType: z.enum(["HOME", "CENTER", "SCHOOL"]).optional(),
+  locationType: z.enum(["HOME", "CENTER", "SCHOOL", "DAYCARE"]).optional(),
   centerId: z.string().nullable().optional(), // Which center (when locationType is CENTER)
   timezone: z.string().optional(), // IANA timezone — falls back to center timezone if omitted
   notes: z.string().nullable().optional(),

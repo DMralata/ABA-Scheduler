@@ -220,14 +220,14 @@ export function WeekGrid({
         </div>
       )}
       <div className="flex-1 overflow-auto">
-      <table className="border-collapse text-xs" style={{ width: "max-content", minWidth: "100%" }}>
+      <table className="border-collapse text-xs" style={{ width: "100%", minWidth: 1040, tableLayout: "fixed" }}>
 
         {/* ── Sticky header ── */}
         <thead className="sticky top-0 z-10 bg-background">
           <tr className="border-b border-border">
             <th
               className="text-left px-3 py-2 text-[10px] font-medium text-muted-foreground uppercase tracking-wide border-r border-border sticky left-0 bg-background"
-              style={{ minWidth: 160 }}
+              style={{ width: 160, minWidth: 160 }}
             >
               Name
             </th>

@@ -103,7 +103,7 @@ export function SessionModal({
   const [sessionTypeId, setSessionTypeId] = useState(draft.sessionTypeId ?? "");
   const [clientId, setClientId] = useState(draft.clientId ?? "");
   const [providerId, setProviderId] = useState(draft.providerId ?? "");
-  const [locationType, setLocationType] = useState<"HOME" | "CENTER" | "SCHOOL">("CENTER");
+  const [locationType, setLocationType] = useState<"HOME" | "CENTER" | "SCHOOL" | "DAYCARE">("CENTER");
   const [centerId, setCenterId] = useState(() => centers.length === 1 ? centers[0].id : "");
   const [startStr, setStartStr] = useState(toLocalDatetimeInput(draft.start, timezone));
   const [endStr, setEndStr] = useState(toLocalDatetimeInput(draft.end, timezone));
@@ -333,7 +333,15 @@ export function SessionModal({
           <div className="space-y-1.5">
             <Label>Session Type</Label>
             <Select value={sessionTypeId} onValueChange={(v) => setSessionTypeId(v ?? "")}>
-              <SelectTrigger><SelectValue placeholder="Select type…" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Select type…">
+                  {(value: unknown) => {
+                    const id = typeof value === "string" ? value : "";
+                    if (!id) return "Select type…";
+                    return sessionTypes.find((t) => t.id === id)?.name ?? "Select type…";
+                  }}
+                </SelectValue>
+              </SelectTrigger>
               <SelectContent>
                 {sessionTypes.map((t) => (
                   <SelectItem key={t.id} value={t.id}>
@@ -351,7 +359,16 @@ export function SessionModal({
           <div className="space-y-1.5">
             <Label>Client <span className="text-muted-foreground font-normal">(optional for non-billable)</span></Label>
             <Select value={clientId} onValueChange={(v) => setClientId(v ?? "")}>
-              <SelectTrigger><SelectValue placeholder="Select client…" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Select client…">
+                  {(value: unknown) => {
+                    const id = typeof value === "string" ? value : "";
+                    if (!id) return "— None —";
+                    const c = clients.find((c) => c.id === id);
+                    return c ? `${c.lastName}, ${c.firstName}` : "Select client…";
+                  }}
+                </SelectValue>
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">— None —</SelectItem>
                 {clients.map((c) => (
@@ -423,12 +440,36 @@ export function SessionModal({
                   </svg>
                   School
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setLocationType("DAYCARE")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border text-xs font-medium transition-colors ${
+                    locationType === "DAYCARE"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-card hover:bg-muted text-foreground"
+                  }`}
+                >
+                  <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 14V7l6-4 6 4v7" />
+                    <path d="M2 14h12" />
+                    <circle cx="8" cy="10" r="1.5" />
+                  </svg>
+                  Daycare
+                </button>
               </div>
 
               {/* Center selector — shown when CENTER is active */}
               {locationType === "CENTER" && centers.length > 0 && (
                 <Select value={centerId} onValueChange={(v) => setCenterId(v ?? "")}>
-                  <SelectTrigger><SelectValue placeholder="Select center…" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select center…">
+                      {(value: unknown) => {
+                        const id = typeof value === "string" ? value : "";
+                        if (!id) return "Select center…";
+                        return centers.find((c) => c.id === id)?.name ?? "Select center…";
+                      }}
+                    </SelectValue>
+                  </SelectTrigger>
                   <SelectContent>
                     {centers.map((c) => (
                       <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
@@ -484,7 +525,16 @@ export function SessionModal({
               </button>
             </div>
             <Select value={providerId} onValueChange={(v) => { setProviderId(v ?? ""); setSuggestions([]); }}>
-              <SelectTrigger><SelectValue placeholder="Select provider…" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Select provider…">
+                  {(value: unknown) => {
+                    const id = typeof value === "string" ? value : "";
+                    if (!id) return "Select provider…";
+                    const p = providers.find((p) => p.id === id);
+                    return p ? `${p.lastName}, ${p.firstName} (${p.position})` : "Select provider…";
+                  }}
+                </SelectValue>
+              </SelectTrigger>
               <SelectContent>
                 {providers.map((p) => (
                   <SelectItem key={p.id} value={p.id}>

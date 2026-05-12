@@ -120,7 +120,9 @@
       "Bash(cat middleware.ts)",
       "Bash(cat src/middleware.ts)",
       "Bash(ls \"src/app/\\(dashboard\\)/admin/\")",
-      "Bash(rmdir \"src/app/\\(dashboard\\)/admin/\")"
+      "Bash(rmdir \"src/app/\\(dashboard\\)/admin/\")",
+      "Bash(git stash *)",
+      "Bash(xargs -I {} cat {})"
     ]
   }
 }

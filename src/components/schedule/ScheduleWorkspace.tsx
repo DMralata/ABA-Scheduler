@@ -17,7 +17,6 @@ import type { TimelineEntity } from "./ResourceTimeline";
 import { EfficiencyBar } from "./EfficiencyBar";
 import { WeekGrid } from "./WeekGrid";
 import type { WeekGridEntity } from "./WeekGrid";
-import { OutreachPromptBanner } from "./OutreachPromptBanner";
 import { MakeupNotificationsDropdown } from "./MakeupNotificationsDropdown";
 
 interface WorkspaceClient {
@@ -155,9 +154,6 @@ export function ScheduleWorkspace({ clients, providers, sessionTypes, centers, c
   const autoDropdownRef = useRef<HTMLDivElement>(null);
   const [undoDays, setUndoDays] = useState<Array<{ dayStart: Date; dayEnd: Date }>>([]);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [outreachBannerSessionIds, setOutreachBannerSessionIds] = useState<string[]>([]);
-  const [outreachBannerDescription, setOutreachBannerDescription] = useState("");
-
   // Action dock drag state — lets the user move the floating dock if it covers a session.
   // Offset is added to the default centered-bottom position; persisted per-center to localStorage.
   const dockStorageKey = `schedule_dock_offset_${centerId ?? "default"}`;
@@ -566,16 +562,7 @@ export function ScheduleWorkspace({ clients, providers, sessionTypes, centers, c
       </div>
 
 
-      {/* Outreach prompt banner — shown after a session is cancelled */}
-      {outreachBannerSessionIds.length > 0 && (
-        <OutreachPromptBanner
-          cancelledSessionIds={outreachBannerSessionIds}
-          changeDescription={outreachBannerDescription}
-          onDismiss={() => { setOutreachBannerSessionIds([]); setOutreachBannerDescription(""); }}
-        />
-      )}
-
-      {/* Workspace */}
+{/* Workspace */}
       <div className="flex flex-1 min-h-0" style={{ position: "relative" }}>
         {viewMode === "day" ? (
           <>
@@ -912,11 +899,8 @@ export function ScheduleWorkspace({ clients, providers, sessionTypes, centers, c
           onClose={() => setCancelTarget(null)}
           onCancelled={() => {
             const sessionId = cancelTarget.sessionId;
-            const desc = `${cancelTarget.title} session on ${cancelTarget.startLabel} has been cancelled.`;
             setCancelTarget(null);
             setRefreshKey(k => k + 1);
-            setOutreachBannerSessionIds([sessionId]);
-            setOutreachBannerDescription(desc);
             addMakeupSession(sessionId);
           }}
           onRemoved={() => { setCancelTarget(null); setRefreshKey(k => k + 1); }}

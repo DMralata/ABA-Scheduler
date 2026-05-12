@@ -397,7 +397,43 @@ export async function getProviderSameDaySessions(
   });
 }
 
-// Count pending proposed sessions — used for the nav rail Schedule badge
+// Count pending proposed sessions for the *current week* (Mon 00:00 – Sun 23:59
+// in the center's timezone). Used for the nav rail Schedule badge — a count
+// scoped to the user's actionable inbox rather than the entire backlog.
 export async function getProposalCount(): Promise<number> {
-  return prisma.proposedSession.count({ where: { status: "PENDING" } });
+  const center = await prisma.center.findFirst({ select: { timezone: true } });
+  const tz = center?.timezone ?? "America/New_York";
+
+  const now = new Date();
+  // Resolve today's local Y-M-D in the center's tz, then derive Monday.
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+  }).formatToParts(now);
+  const y = Number(parts.find((p) => p.type === "year")?.value);
+  const m = Number(parts.find((p) => p.type === "month")?.value);
+  const d = Number(parts.find((p) => p.type === "day")?.value);
+  const wk = parts.find((p) => p.type === "weekday")?.value ?? "Mon";
+  const dayIdx = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(wk);
+  // Days since Monday (Mon = 0, …, Sun = 6)
+  const sinceMon = (dayIdx + 6) % 7;
+  // Use UTC noon as a tz-safe anchor and step in 24h increments.
+  const todayAnchor = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  const mondayAnchor = new Date(todayAnchor.getTime() - sinceMon * 86_400_000);
+  const sundayAnchor = new Date(mondayAnchor.getTime() + 6 * 86_400_000);
+
+  // Bound the week generously in UTC — proposals are filtered by startTime,
+  // which is stored in UTC. Padding ±12h covers any local-vs-UTC offset.
+  const weekStart = new Date(mondayAnchor.getTime() - 12 * 3_600_000);
+  const weekEnd   = new Date(sundayAnchor.getTime() + 36 * 3_600_000);
+
+  return prisma.proposedSession.count({
+    where: {
+      status: "PENDING",
+      startTime: { gte: weekStart, lt: weekEnd },
+    },
+  });
 }

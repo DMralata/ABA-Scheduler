@@ -316,7 +316,7 @@ export async function POST(request: NextRequest) {
   // Map booked sessions to day/time windows per provider and per client
   const bookedByProvider: Record<
     string,
-    Array<{ dayOfWeek: import("@prisma/client").DayOfWeek; startTime: string; endTime: string; clientId?: string; locationType?: "HOME" | "CENTER" | "HYBRID" | "SCHOOL" }>
+    Array<{ dayOfWeek: import("@prisma/client").DayOfWeek; startTime: string; endTime: string; clientId?: string; locationType?: "HOME" | "CENTER" | "HYBRID" | "SCHOOL" | "DAYCARE" }>
   > = {};
   const bookedByClient: Record<
     string,

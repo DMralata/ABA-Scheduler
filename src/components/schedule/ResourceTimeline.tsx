@@ -32,9 +32,9 @@ const TIMELINE_COLORS = {
 const HOUR_START = 8;             // 8 am
 const HOUR_END = 20;              // 8 pm
 const HOURS = HOUR_END - HOUR_START;  // 12 hours
-const HOUR_PX = 60;               // px per hour — 15-min snap = 15 px
+const HOUR_PX = 100;              // px per hour — 15-min snap = 25 px
 const SNAP_MIN = 15;
-const SNAP_PX = (SNAP_MIN / 60) * HOUR_PX;
+const SNAP_PX = (SNAP_MIN / 60) * HOUR_PX; // 25 px at HOUR_PX=100
 const ROW_H = 24;
 const LABEL_W = 160;
 const TOTAL_W = HOURS * HOUR_PX; // 720 px
@@ -112,7 +112,7 @@ interface FetchedEvent {
     providerId: string | null;
     blockParty?: "CLIENT" | "PROVIDER";
     proposalId?: string;
-    locationType?: "HOME" | "CENTER" | "SCHOOL";
+    locationType?: "HOME" | "CENTER" | "SCHOOL" | "DAYCARE";
     clientAddress?: string | null;
     status?: string;
     cancelledBy?: "CLIENT" | "PROVIDER" | null;
@@ -208,7 +208,7 @@ function assignLanes(events: FetchedEvent[]): Map<string, LaneResult> {
 }
 
 // ── Location icon ────────────────────────────────────────────────────────────
-function LocationIcon({ type }: { type: "HOME" | "CENTER" | "SCHOOL" }) {
+function LocationIcon({ type }: { type: "HOME" | "CENTER" | "SCHOOL" | "DAYCARE" }) {
   if (type === "HOME") {
     return (
       <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 shrink-0 opacity-90" fill="currentColor">
@@ -223,6 +223,14 @@ function LocationIcon({ type }: { type: "HOME" | "CENTER" | "SCHOOL" }) {
         <path d="M3 3h6v1H3z" />
         <rect x="2" y="4" width="8" height="7" rx="1" />
         <rect x="4.5" y="6" width="3" height="2" fill="white" />
+      </svg>
+    );
+  }
+  if (type === "DAYCARE") {
+    return (
+      <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 shrink-0 opacity-90" fill="currentColor">
+        <path d="M2 10V5l4-3 4 3v5z" />
+        <circle cx="6" cy="7" r="1" fill="white" />
       </svg>
     );
   }

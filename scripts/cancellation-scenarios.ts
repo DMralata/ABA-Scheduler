@@ -392,7 +392,7 @@ function runDayOptimizer(
   const patchedClients: SchedulerClient[] = ctx.clients.map(c => ({
     ...c,
     minimumRbtLevel: c.minimumRbtLevel as import("@prisma/client").RbtLevel | null,
-    preferredLocation: c.preferredLocation as "HOME" | "CENTER" | "HYBRID" | "SCHOOL",
+    preferredLocation: c.preferredLocation as "HOME" | "CENTER" | "HYBRID" | "SCHOOL" | "DAYCARE",
     bookedWindows: bookedByClient[c.id] ?? [],
     daysNeeded: 1,
   }));
@@ -472,7 +472,7 @@ async function main() {
     targetDate: localDate(ctx.weekOf), // not used in week mode
     timezone: TIMEZONE,
     centerId: CENTER_ID,
-    clients: ctx.clients.map(c => ({ ...c, minimumRbtLevel: c.minimumRbtLevel as import("@prisma/client").RbtLevel | null, preferredLocation: c.preferredLocation as "HOME" | "CENTER" | "HYBRID" | "SCHOOL", daysNeeded: Math.max(1, Math.ceil(c.approvedWeeklyHours / DAILY_MAX_HOURS)), bookedWindows: [] as never[] })),
+    clients: ctx.clients.map(c => ({ ...c, minimumRbtLevel: c.minimumRbtLevel as import("@prisma/client").RbtLevel | null, preferredLocation: c.preferredLocation as "HOME" | "CENTER" | "HYBRID" | "SCHOOL" | "DAYCARE", daysNeeded: Math.max(1, Math.ceil(c.approvedWeeklyHours / DAILY_MAX_HOURS)), bookedWindows: [] as never[] })),
     providers: ctx.providers.map(p => ({ ...p, position: p.position as "BCBA" | "BCaBA" | "RBT", rbtLevel: p.rbtLevel as import("@prisma/client").RbtLevel | null, gender: p.gender ?? "", bookedWindows: [] as never[] })),
     sessionTypeIds: ctx.sessionTypeIds,
     driveTimeSessionTypeId: ctx.driveTimeSessionTypeId,

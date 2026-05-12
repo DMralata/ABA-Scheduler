@@ -169,7 +169,7 @@ async function main() {
     return { dayOfWeek: localDay, startTime: localTime };
   }
 
-  const bookedByProvider: Record<string, Array<{ dayOfWeek: import("@prisma/client").DayOfWeek; startTime: string; endTime: string; clientId?: string; locationType?: "HOME" | "CENTER" | "HYBRID" | "SCHOOL" }>> = {};
+  const bookedByProvider: Record<string, Array<{ dayOfWeek: import("@prisma/client").DayOfWeek; startTime: string; endTime: string; clientId?: string; locationType?: "HOME" | "CENTER" | "HYBRID" | "SCHOOL" | "DAYCARE" }>> = {};
   const bookedByClient: Record<string, Array<{ dayOfWeek: import("@prisma/client").DayOfWeek; startTime: string; endTime: string }>> = {};
 
   for (const session of [...bookedSessions, ...approvedProposals]) {

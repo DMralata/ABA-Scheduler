@@ -72,7 +72,7 @@ function buildWeekDatesSim(weekOf: Date, timezone: string): Record<DayOfWeek, st
 // Copied from optimizer.ts (not exported) — unchanged
 function commitAssignmentSim(
   providerId: string, clientId: string, slot: CandidateSlot,
-  sessionHours: number, locationType: "HOME" | "CENTER" | "HYBRID" | "SCHOOL", ws: WorkingState
+  sessionHours: number, locationType: "HOME" | "CENTER" | "HYBRID" | "SCHOOL" | "DAYCARE", ws: WorkingState
 ): void {
   const booked: BookedSlot = { dayOfWeek: slot.dayOfWeek, startMins: slot.startMins, endMins: slot.endMins, clientId, locationType };
   if (!ws.providerBookings.has(providerId)) ws.providerBookings.set(providerId, []);
@@ -521,7 +521,7 @@ async function main() {
     }),
   ]);
 
-  const bookedByProvider: Record<string, Array<{ dayOfWeek: DayOfWeek; startTime: string; endTime: string; clientId?: string; locationType?: "HOME" | "CENTER" | "HYBRID" | "SCHOOL" }>> = {};
+  const bookedByProvider: Record<string, Array<{ dayOfWeek: DayOfWeek; startTime: string; endTime: string; clientId?: string; locationType?: "HOME" | "CENTER" | "HYBRID" | "SCHOOL" | "DAYCARE" }>> = {};
   const bookedByClient: Record<string, Array<{ dayOfWeek: DayOfWeek; startTime: string; endTime: string }>> = {};
   for (const s of [...bookedSessions, ...approvedProposals]) {
     const dow = toLocalDayOfWeek(s.startTime, tz);

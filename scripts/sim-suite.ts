@@ -372,7 +372,7 @@ async function loadDBContext(targetDate: Date): Promise<DBContext> {
       approvedProviderIds: c.approvedHomeProviders.map(ah => ah.providerId),
       historicalProviderIds: historicalByClient[c.id] ?? [],
       hasPriorWeekHistory: priorWeekClientIds.has(c.id),
-      preferredLocation: c.preferredLocation as "HOME" | "CENTER" | "HYBRID" | "SCHOOL",
+      preferredLocation: c.preferredLocation as "HOME" | "CENTER" | "HYBRID" | "SCHOOL" | "DAYCARE",
     };
   });
 
