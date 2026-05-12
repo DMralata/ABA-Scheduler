@@ -60,7 +60,8 @@ export function SessionTypePalette({
         flexDirection: "column",
         padding: "16px 0",
         height: "100%",
-        overflowY: "auto",
+        minHeight: 0,
+        overflow: "hidden",
       }}
     >
       <div
@@ -69,6 +70,7 @@ export function SessionTypePalette({
           alignItems: "center",
           justifyContent: "space-between",
           padding: "0 18px 12px",
+          flexShrink: 0,
         }}
       >
         <div
@@ -91,6 +93,8 @@ export function SessionTypePalette({
           flexDirection: "column",
           gap: 2,
           flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
         }}
       >
         {sessionTypes.length === 0 && (
@@ -198,6 +202,8 @@ export function SessionTypePalette({
           padding: "14px 18px",
           borderTop: "1px solid var(--ata-gray-100)",
           marginTop: 12,
+          flexShrink: 0,
+          background: "#FFFFFF",
         }}
       >
         <div
