@@ -684,14 +684,14 @@ export function ScheduleWorkspace({ clients, providers, sessionTypes, centers, c
             double-click the grip to snap back to the default position.
         ──────────────────────────────────────────────────────────────────── */}
         <div style={{
-          position: "absolute", bottom: 18, left: "50%",
+          position: "fixed", bottom: 18, left: "50%",
           transform: `translate(calc(-50% + ${dockOffset.x}px), ${dockOffset.y}px)`,
           display: "flex", alignItems: "center", gap: 4,
           background: "var(--ata-gray-900)", color: "#ffffff",
           padding: 4, borderRadius: 11,
           boxShadow: "0 10px 28px rgba(15,15,12,0.22), 0 1px 3px rgba(15,15,12,0.10)",
           fontFamily: "Geist, Inter, sans-serif",
-          zIndex: 10,
+          zIndex: 40,
           whiteSpace: "nowrap",
           touchAction: "none", // prevents touch scroll while dragging on mobile
         }}>
