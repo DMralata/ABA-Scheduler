@@ -163,8 +163,12 @@ export function ScheduleWorkspace({ clients, providers, sessionTypes, centers, c
       const raw = localStorage.getItem(`schedule_dock_offset_${centerId ?? "default"}`);
       if (!raw) return { x: 0, y: 0 };
       const parsed = JSON.parse(raw);
-      if (typeof parsed?.x === "number" && typeof parsed?.y === "number") return parsed;
-      return { x: 0, y: 0 };
+      if (typeof parsed?.x !== "number" || typeof parsed?.y !== "number") return { x: 0, y: 0 };
+      // Clamp persisted offsets to a reasonable range so a previously-dragged
+      // dock can't end up off-screen with no way for the user to recover it.
+      const x = Math.max(-600, Math.min(600, parsed.x));
+      const y = Math.max(-600, Math.min(40, parsed.y));
+      return { x, y };
     } catch { return { x: 0, y: 0 }; }
   });
   const dockDragRef = useRef<{ startX: number; startY: number; offsetX: number; offsetY: number } | null>(null);
@@ -481,7 +485,7 @@ export function ScheduleWorkspace({ clients, providers, sessionTypes, centers, c
   };
 
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 4rem)" }}>
+    <div className="flex flex-col" style={{ height: "calc(100vh - 2rem)" }}>
       {/* ── Slim toolbar ─────────────────────────────────────────────────────── */}
       <div style={{
         height: 56, display: "flex", alignItems: "center", gap: 14,

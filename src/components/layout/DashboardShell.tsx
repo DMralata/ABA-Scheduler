@@ -26,6 +26,11 @@ export function DashboardShell({
   );
   const variant = compact ? "compact" : "expanded";
   const padLeft = compact ? 72 : 184;
+  // Schedule view uses its own bottom-anchored layout (palette legend + dock).
+  // Drop the wrapper's bottom padding there so there's no empty gray strip
+  // below the workspace. Top + horizontal padding stays.
+  const isSchedule = pathname === "/schedule" || pathname.startsWith("/schedule/");
+  const innerClass = isSchedule ? "pt-8 px-8 pb-0" : "p-8";
 
   return (
     <div className="min-h-screen" style={{ background: "var(--ata-bg)" }}>
@@ -37,7 +42,7 @@ export function DashboardShell({
         variant={variant}
       />
       <main style={{ paddingLeft: padLeft }}>
-        <div className="p-8">{children}</div>
+        <div className={innerClass}>{children}</div>
       </main>
     </div>
   );
