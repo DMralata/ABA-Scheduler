@@ -229,9 +229,12 @@ export function findEligibleProviders(
 
     // Hard drive time cap for HOME sessions — reject providers > 45 min away.
     // Only enforced when actual drive data exists (drive > 0) and not on the retry pass.
-    // CENTER sessions are excluded: provider→client home distance is irrelevant at a clinic.
+    // CENTER and SCHOOL sessions are excluded: both parties travel to a shared
+    // third location, so the provider→client home distance the cap measures is
+    // not meaningful (the actual drive is provider→clinic or provider→school).
     const MAX_DRIVE_MINS = 45;
-    if (!relaxDriveTime && client.preferredLocation !== "CENTER") {
+    const sharedLocation = client.preferredLocation === "CENTER" || client.preferredLocation === "SCHOOL";
+    if (!relaxDriveTime && !sharedLocation) {
       const driveCap = driveMinutes[provider.id]?.[client.id] ?? 0;
       if (driveCap > MAX_DRIVE_MINS) {
         failures.push({ providerId: provider.id, reason: `${driveCap} min drive exceeds 45-min cap` });

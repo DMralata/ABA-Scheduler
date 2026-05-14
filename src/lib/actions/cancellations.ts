@@ -27,7 +27,7 @@ export async function cancelSession(
 
   const session = await prisma.session.findUnique({
     where: { id: sessionId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, providerId: true, startTime: true, endTime: true },
   });
 
   if (!session) return { success: false, error: "Session not found." };
@@ -68,6 +68,23 @@ export async function cancelSession(
       rejectedAt: new Date(),
     },
   });
+
+  // Delete adjacent Drive Time sessions — they exist only to span the gap
+  // before/after this session. Without cleanup, they linger as orphans on
+  // the timeline pointing to a cancelled session.
+  if (session.providerId) {
+    await prisma.session.deleteMany({
+      where: {
+        providerId: session.providerId,
+        status: "SCHEDULED",
+        sessionType: { name: "Drive Time" },
+        OR: [
+          { endTime: session.startTime },
+          { startTime: session.endTime },
+        ],
+      },
+    });
+  }
 
   await writeAuditLog({
     action: "UPDATE",
@@ -160,7 +177,7 @@ export async function cancelRestOfDay(
       status: { in: ["SCHEDULED", "IN_PROGRESS"] },
       startTime: { gte: session.startTime, lt: dayEndBound },
     },
-    select: { id: true },
+    select: { id: true, providerId: true, startTime: true, endTime: true },
   });
   const toCancelIds = toCancel.map((s) => s.id);
 
@@ -185,6 +202,24 @@ export async function cancelRestOfDay(
         status: "REJECTED",
         rejectionReason: "Session cancelled (rest of day)",
         rejectedAt: new Date(),
+      },
+    });
+  }
+
+  // Delete Drive Time sessions adjacent to any cancelled session — same cleanup
+  // as cancelSession but for the rest-of-day batch.
+  const driveCleanupOr = toCancel
+    .filter((s) => s.providerId)
+    .flatMap((s) => [
+      { providerId: s.providerId!, endTime: s.startTime },
+      { providerId: s.providerId!, startTime: s.endTime },
+    ]);
+  if (driveCleanupOr.length > 0) {
+    await prisma.session.deleteMany({
+      where: {
+        status: "SCHEDULED",
+        sessionType: { name: "Drive Time" },
+        OR: driveCleanupOr,
       },
     });
   }

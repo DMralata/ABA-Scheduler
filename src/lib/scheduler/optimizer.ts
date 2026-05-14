@@ -444,7 +444,15 @@ export function optimize(
         // Account for hours already committed this run so auth isn't over-drawn
         const inRunHours = workingState.clientHoursCommitted.get(client.id) ?? 0;
         const effectiveRemaining = client.approvedWeeklyHours - client.usedHoursThisWeek - inRunHours;
-        if (effectiveRemaining < client.sessionHours) continue; // auth exhausted for this week
+        if (effectiveRemaining < client.sessionHours) {
+          // Only record a skip reason for clients with zero days scheduled — partials
+          // get their reason set later in the partial-coverage pass below.
+          const daysSoFar = workingState.clientScheduledDays.get(client.id)?.size ?? 0;
+          if (daysSoFar === 0) {
+            skipReasons[client.id] = `Auth exhausted: ${effectiveRemaining.toFixed(1)}h remaining < ${client.sessionHours}h per session`;
+          }
+          continue;
+        }
 
         const scheduled = trySchedule(client, false);
         if (!scheduled) partialFailures.add(client.id);
