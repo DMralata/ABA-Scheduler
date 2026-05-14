@@ -114,9 +114,13 @@ export async function GET(request: NextRequest) {
 
     return {
       id: s.id,
-      title: isDriveTime ? "Drive Time" : (s.client
-        ? `${maskClient(s.client.lastName)}, ${maskClient(s.client.firstName)}`
-        : s.provider.lastName + ", " + s.provider.firstName),
+      title: isDriveTime
+        ? "Drive Time"
+        : s.client
+          ? `${maskClient(s.client.lastName)}, ${maskClient(s.client.firstName)}`
+          : s.provider
+            ? `${s.provider.lastName}, ${s.provider.firstName}`
+            : s.name,
       start: s.startTime.toISOString(),
       end: s.endTime.toISOString(),
       backgroundColor: color,
@@ -134,8 +138,8 @@ export async function GET(request: NextRequest) {
           : null,
         locationType: s.locationType ?? "CENTER",
         providerId: s.providerId,
-        providerName: `${s.provider.firstName} ${s.provider.lastName}`,
-        providerPosition: s.provider.position,
+        providerName: s.provider ? `${s.provider.firstName} ${s.provider.lastName}` : null,
+        providerPosition: s.provider?.position ?? null,
         status: s.status,
         cancelledBy: s.cancelledBy ?? null,
         driveMinutes,
@@ -225,6 +229,7 @@ export async function GET(request: NextRequest) {
     endTime: Date;
   }> = [
     ...sessions
+      .filter((s): s is typeof s & { providerId: string } => s.providerId !== null)
       .filter((s) => s.locationType === "HOME" || s.locationType === "CENTER" || s.locationType === "SCHOOL")
       .filter((s) => !s.sessionType || s.sessionType.name !== "Drive Time") // exclude Drive Time sessions
       .map((s) => {
@@ -236,7 +241,7 @@ export async function GET(request: NextRequest) {
           ? (s.client ? formatAddress([s.client.street, s.client.city, s.client.state, s.client.zip]) : null)
           : isSchool
             ? schoolAddress
-            : (centerAddress ?? formatAddress([s.provider.street, s.provider.city, s.provider.state, s.provider.zip]));
+            : (centerAddress ?? (s.provider ? formatAddress([s.provider.street, s.provider.city, s.provider.state, s.provider.zip]) : null));
         const fromLatV = isHome ? (s.client?.latitude ?? null) : isSchool ? schoolLat : (centerLat ?? s.provider?.latitude ?? null);
         const fromLngV = isHome ? (s.client?.longitude ?? null) : isSchool ? schoolLng : (centerLng ?? s.provider?.longitude ?? null);
         return {
@@ -286,9 +291,11 @@ export async function GET(request: NextRequest) {
       }),
   ];
 
-  // Build provider name map for drive event labels
+  // Build provider name map for drive event labels.
+  // Sessions without a provider (non-billable client blocks) are skipped.
   const providerNameMap = new Map<string, string>();
   for (const s of sessions) {
+    if (!s.providerId || !s.provider) continue;
     if (!providerNameMap.has(s.providerId))
       providerNameMap.set(s.providerId, `${s.provider.firstName} ${s.provider.lastName}`);
   }

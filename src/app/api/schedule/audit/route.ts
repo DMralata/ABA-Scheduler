@@ -117,7 +117,7 @@ export async function GET(request: NextRequest) {
   // Cache mask results by id so we can apply the same names to nested client objects below.
   const clientMaskById = new Map(centerClients.map((c) => [c.id, { firstName: c.firstName, lastName: c.lastName }]));
 
-  const [weekSessions, weekProposals] = await Promise.all([
+  const [weekSessionsRaw, weekProposalsRaw] = await Promise.all([
     prisma.session.findMany({
       where: {
         providerId: { in: providerIds },
@@ -161,7 +161,7 @@ export async function GET(request: NextRequest) {
 
   // Apply masking to nested client refs on each session so downstream label
   // builders (Pass 1 compliance, Pass 4 travel) emit masked names.
-  for (const s of weekSessions) {
+  for (const s of weekSessionsRaw) {
     if (s.client) {
       const m = s.clientId ? clientMaskById.get(s.clientId) : null;
       if (m) {
@@ -173,6 +173,18 @@ export async function GET(request: NextRequest) {
       }
     }
   }
+
+  // Audit logic groups sessions by providerId; non-billable client blocks
+  // (e.g., Nap) can have a null providerId, which would break those maps.
+  // Drop them here — they're outside the audit's compliance/utilization scope.
+  type SessionWithProvider = (typeof weekSessionsRaw)[number] & { providerId: string; provider: NonNullable<(typeof weekSessionsRaw)[number]["provider"]> };
+  const weekSessions: SessionWithProvider[] = weekSessionsRaw.filter(
+    (s): s is SessionWithProvider => s.providerId !== null && s.provider !== null
+  );
+  type ProposalWithProvider = (typeof weekProposalsRaw)[number] & { providerId: string };
+  const weekProposals: ProposalWithProvider[] = weekProposalsRaw.filter(
+    (p): p is ProposalWithProvider => p.providerId !== null
+  );
 
   // ── PASS 1: COMPLIANCE ─────────────────────────────────────────────────────
   type Violation = {
@@ -524,7 +536,7 @@ export async function GET(request: NextRequest) {
     });
     const priorProviderByClient = new Map<string, string>();
     for (const s of priorSessions) {
-      if (!s.clientId || priorProviderByClient.has(s.clientId)) continue;
+      if (!s.clientId || !s.providerId || priorProviderByClient.has(s.clientId)) continue;
       priorProviderByClient.set(s.clientId, s.providerId);
     }
     let consistent = 0;

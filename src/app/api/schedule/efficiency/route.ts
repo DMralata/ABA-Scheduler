@@ -120,11 +120,12 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
-  // Providers working today = those with at least one session or proposal
+  // Providers working today = those with at least one session or proposal.
+  // Sessions without a provider (non-billable client blocks) are skipped here.
   const workingRbtIds = new Set<string>(
     [...scheduledSessions, ...pendingProposals]
       .map((s) => s.providerId)
-      .filter((id) => rbtProviderIds.includes(id))
+      .filter((id): id is string => id !== null && rbtProviderIds.includes(id))
   );
 
   // Sum available hours for working RBTs only, then subtract their drive time

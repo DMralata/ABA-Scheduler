@@ -231,7 +231,7 @@ export type DashboardSession = {
   status: string;
   sessionTypeName: string;
   locationType: string | null;
-  providerId: string;
+  providerId: string | null;
   clientName: string | null;
   providerName: string | null;
   providerPosition: string | null;

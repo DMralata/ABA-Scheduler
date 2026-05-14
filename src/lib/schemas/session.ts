@@ -3,7 +3,7 @@ import { z } from "zod";
 export const BookSessionSchema = z.object({
   name: z.string().min(1, "Session name is required"),
   sessionTypeId: z.string().min(1, "Session type is required"),
-  providerId: z.string().min(1, "Provider is required"),
+  providerId: z.string().nullable().optional(),
   clientId: z.string().nullable().optional(),
   authorizationId: z.string().nullable().optional(), // Resolved during validation; can be pre-supplied
   startTime: z.coerce.date({ required_error: "Start time is required" }),
@@ -16,6 +16,12 @@ export const BookSessionSchema = z.object({
 }).refine(
   (data) => data.endTime > data.startTime,
   { message: "End time must be after start time", path: ["endTime"] }
+).refine(
+  (data) => !data.billable || (data.providerId && data.providerId.length > 0),
+  { message: "Billable sessions require a provider.", path: ["providerId"] }
+).refine(
+  (data) => (data.providerId && data.providerId.length > 0) || (data.clientId && data.clientId.length > 0),
+  { message: "A session must have at least a provider or a client.", path: ["providerId"] }
 );
 
 export const RescheduleSessionSchema = z.object({

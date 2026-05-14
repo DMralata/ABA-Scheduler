@@ -190,7 +190,8 @@ function buildBuckets(
     // HOME session's endTime and the next session's startTime for the same provider,
     // where the gap has already elapsed (endTime of the drive gap <= now).
     const homeEligible = inBucket.filter(
-      (s) => !["CANCELLED"].includes(s.status) && s.locationType === "HOME" && s.endTime <= now
+      (s): s is typeof s & { providerId: string } =>
+        !["CANCELLED"].includes(s.status) && s.locationType === "HOME" && s.endTime <= now && s.providerId !== null
     );
     const byProvider = new Map<string, typeof homeEligible>();
     for (const s of homeEligible) {

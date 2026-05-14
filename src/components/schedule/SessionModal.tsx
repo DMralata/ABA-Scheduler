@@ -150,8 +150,12 @@ export function SessionModal({
     const endTime = fromLocalDatetimeInput(endStr, timezone);
     if (endTime <= startTime) { setError("End time must be after start time."); return; }
 
-    if (!providerId) {
-      // No provider selected — show AI suggestions instead of a hard error
+    const isBillable = selectedType?.billable ?? true;
+
+    if (!providerId && isBillable) {
+      // Billable session with no provider selected — show AI suggestions
+      // instead of a hard error. Non-billable sessions are allowed to save
+      // without a provider (e.g., a Nap for a client).
       setError(null);
       setSuggestionsLoading(true);
       setSuggestions([]);
@@ -178,17 +182,22 @@ export function SessionModal({
       return;
     }
 
+    if (!providerId && !clientId) {
+      setError("A session must have at least a provider or a client.");
+      return;
+    }
+
     const name = sessionName.trim() || buildAutoName(selectedType, selectedClient) || "Session";
 
     setIsPending(true);
     bookSession({
       name,
       sessionTypeId,
-      providerId,
+      providerId: providerId || null,
       clientId: clientId || null,
       startTime,
       endTime,
-      billable: selectedType?.billable ?? true,
+      billable: isBillable,
       locationType: clientId ? locationType : undefined,
       centerId: locationType === "CENTER" ? (centerId || null) : null,
       timezone,
@@ -493,7 +502,12 @@ export function SessionModal({
           {/* Provider */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label>Provider</Label>
+              <Label>
+                Provider
+                {selectedType && !selectedType.billable && (
+                  <span className="text-muted-foreground font-normal"> (optional for non-billable)</span>
+                )}
+              </Label>
               <button
                 type="button"
                 disabled={!sessionTypeId || suggestionsLoading || isPending}
@@ -529,13 +543,16 @@ export function SessionModal({
                 <SelectValue placeholder="Select provider…">
                   {(value: unknown) => {
                     const id = typeof value === "string" ? value : "";
-                    if (!id) return "Select provider…";
+                    if (!id) return selectedType && !selectedType.billable ? "— None —" : "Select provider…";
                     const p = providers.find((p) => p.id === id);
                     return p ? `${p.lastName}, ${p.firstName} (${p.position})` : "Select provider…";
                   }}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
+                {selectedType && !selectedType.billable && (
+                  <SelectItem value="">— None —</SelectItem>
+                )}
                 {providers.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.lastName}, {p.firstName} <span className="text-muted-foreground">({p.position})</span>

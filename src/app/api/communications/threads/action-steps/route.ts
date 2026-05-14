@@ -179,7 +179,10 @@ export async function POST(request: NextRequest) {
       const clientName = s.client
         ? `${s.client.firstName} ${s.client.lastName} (${s.client.phoneNumber ?? "no phone"})`
         : "No client";
-      return `- ${date} ${start}–${end}: ${s.sessionType?.name ?? "Session"} with ${clientName} — Provider: ${s.provider.firstName} ${s.provider.lastName} (${s.provider.phoneNumber ?? "no phone"})`;
+      const providerName = s.provider
+        ? `${s.provider.firstName} ${s.provider.lastName} (${s.provider.phoneNumber ?? "no phone"})`
+        : "No provider";
+      return `- ${date} ${start}–${end}: ${s.sessionType?.name ?? "Session"} with ${clientName} — Provider: ${providerName}`;
     })
     .join("\n");
 

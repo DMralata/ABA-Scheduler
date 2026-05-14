@@ -63,17 +63,19 @@ export async function bookSession(
     return { success: false, error: "Session type not found." };
   }
 
-  // Load provider — guaranteed to include availability and blocks
-  const provider = await getProviderForValidation(providerId);
-  if (!provider) {
+  // Load provider when supplied. Non-billable client blocks (e.g., Nap) may
+  // omit the provider entirely — the Zod schema enforces that billable sessions
+  // still require one.
+  const provider = providerId ? await getProviderForValidation(providerId) : null;
+  if (providerId && !provider) {
     return { success: false, error: "Provider not found." };
   }
-  if (provider.status !== "ACTIVE") {
+  if (provider && provider.status !== "ACTIVE") {
     return { success: false, error: "Provider is not active." };
   }
 
-  // BCBA-only session types
-  if (sessionType.requiresBcba && provider.position !== "BCBA" && provider.position !== "BCaBA") {
+  // BCBA-only session types only apply when a provider is assigned
+  if (provider && sessionType.requiresBcba && provider.position !== "BCBA" && provider.position !== "BCaBA") {
     return { success: false, error: `This session type requires a BCBA or BCaBA. ${provider.firstName} ${provider.lastName} is not qualified.` };
   }
 
@@ -88,8 +90,9 @@ export async function bookSession(
 
     // Drive time gap check — only for HOME or CENTER sessions (not null/unset location types)
     // Mirrors the gap enforcement in the auto-scheduler so manual bookings follow the same rules.
+    // Skipped when no provider is assigned (non-billable client block like a Nap).
     const locationType = parsed.data.locationType;
-    if (locationType === "HOME" || locationType === "CENTER" || locationType === "SCHOOL" || locationType === "DAYCARE") {
+    if (providerId && (locationType === "HOME" || locationType === "CENTER" || locationType === "SCHOOL" || locationType === "DAYCARE")) {
       const center = client.centerId
         ? await prisma.center.findUnique({
             where: { id: client.centerId },
@@ -160,16 +163,19 @@ export async function bookSession(
     try {
       const session = await prisma.$transaction(async (tx) => {
         // Re-check provider and client overlap inside the transaction to prevent
-        // concurrent requests from double-booking the same slot.
-        const providerConflict = await tx.session.findFirst({
-          where: {
-            providerId,
-            status: { in: ["SCHEDULED", "IN_PROGRESS"] },
-            AND: [{ startTime: { lt: endTime } }, { endTime: { gt: startTime } }],
-          },
-        });
-        if (providerConflict) {
-          throw new Error("Provider already has a session scheduled during this time.");
+        // concurrent requests from double-booking the same slot. The provider
+        // check is skipped for client-only non-billable blocks (no provider).
+        if (providerId) {
+          const providerConflict = await tx.session.findFirst({
+            where: {
+              providerId,
+              status: { in: ["SCHEDULED", "IN_PROGRESS"] },
+              AND: [{ startTime: { lt: endTime } }, { endTime: { gt: startTime } }],
+            },
+          });
+          if (providerConflict) {
+            throw new Error("Provider already has a session scheduled during this time.");
+          }
         }
 
         const clientConflict = await tx.session.findFirst({
@@ -241,6 +247,7 @@ export async function bookSession(
           data: {
             ...sessionData,
             clientId,
+            providerId: providerId ?? null,
             authorizationId: authorizationId ?? null,
             timezone: parsed.data.timezone ?? null,
           },
@@ -252,7 +259,7 @@ export async function bookSession(
         action: "CREATE",
         resourceType: "Session",
         resourceId: session.id,
-        metadata: { clientId, providerId, billable },
+        metadata: { clientId, providerId: providerId ?? null, billable },
       });
 
       revalidatePath("/schedule");
@@ -268,6 +275,11 @@ export async function bookSession(
   // Reject if caller tried to book a billable session without a client.
   if (parsed.data.billable) {
     return { success: false, error: "Billable sessions require a client." };
+  }
+  // No client AND no provider is rejected at the schema layer, but narrow here
+  // so the rest of this branch can treat providerId as a concrete string.
+  if (!providerId) {
+    return { success: false, error: "A session must have at least a provider or a client." };
   }
   // Wrap overlap check + create in a transaction to prevent concurrent double-booking.
   try {
@@ -286,6 +298,7 @@ export async function bookSession(
       return tx.session.create({
         data: {
           ...parsed.data,
+          providerId,
           clientId: null,
           billable: false,
           authorizationId: null,
@@ -366,10 +379,12 @@ export async function uncancelSession(id: string): Promise<ActionResult<void>> {
 
   // Remove any proposals or sessions that filled the freed slot while this session
   // was cancelled. Restoring Olivia's session without clearing the fill-in would
-  // double-book the provider in the same window.
+  // double-book the provider in the same window. Provider-side cleanup is
+  // skipped when the cancelled session had no provider (non-billable client
+  // block like a Nap).
   await prisma.$transaction([
     // Reject PENDING proposals that conflict with this provider's restored time window
-    prisma.proposedSession.updateMany({
+    ...(session.providerId ? [prisma.proposedSession.updateMany({
       where: {
         providerId: session.providerId,
         status: "PENDING",
@@ -377,7 +392,7 @@ export async function uncancelSession(id: string): Promise<ActionResult<void>> {
         endTime: { gt: session.startTime },
       },
       data: { status: "REJECTED", rejectionReason: "Original session restored" },
-    }),
+    })] : []),
     // Reject PENDING proposals that conflict with this client's restored time window
     // (covers makeup sessions booked for the client while this session was cancelled)
     ...(session.clientId ? [prisma.proposedSession.updateMany({
@@ -390,7 +405,7 @@ export async function uncancelSession(id: string): Promise<ActionResult<void>> {
       data: { status: "REJECTED", rejectionReason: "Original session restored" },
     })] : []),
     // Delete SCHEDULED sessions (other than this one) that conflict with the provider's window
-    prisma.session.deleteMany({
+    ...(session.providerId ? [prisma.session.deleteMany({
       where: {
         id: { not: id },
         providerId: session.providerId,
@@ -398,7 +413,7 @@ export async function uncancelSession(id: string): Promise<ActionResult<void>> {
         startTime: { lt: session.endTime },
         endTime: { gt: session.startTime },
       },
-    }),
+    })] : []),
     // Delete SCHEDULED sessions (other than this one) that conflict with the client's window
     // (covers makeup sessions approved for the client during the cancellation window)
     ...(session.clientId ? [prisma.session.deleteMany({
@@ -623,8 +638,9 @@ export async function rescheduleSession(
     select: { name: true, serviceCode: true },
   });
 
-  const provider = await getProviderForValidation(session.providerId);
-  if (!provider) {
+  // Provider may be null on non-billable client blocks (e.g., Nap).
+  const provider = session.providerId ? await getProviderForValidation(session.providerId) : null;
+  if (session.providerId && !provider) {
     return { success: false, error: "Provider not found." };
   }
 
@@ -638,8 +654,9 @@ export async function rescheduleSession(
 
     // Drive-time gap check — mirrors bookSession so dragging a session into a
     // new slot doesn't bypass the same drive-buffer rule that booking enforces.
+    // Skipped when this session has no provider.
     const locationType = session.locationType;
-    if (locationType === "HOME" || locationType === "CENTER" || locationType === "SCHOOL" || locationType === "DAYCARE") {
+    if (session.providerId && (locationType === "HOME" || locationType === "CENTER" || locationType === "SCHOOL" || locationType === "DAYCARE")) {
       const center = client.centerId
         ? await prisma.center.findUnique({
             where: { id: client.centerId },
@@ -706,16 +723,19 @@ export async function rescheduleSession(
     try {
       const updated = await prisma.$transaction(async (tx) => {
         // Re-check overlap inside the transaction to prevent concurrent double-bookings.
-        const providerConflict = await tx.session.findFirst({
-          where: {
-            providerId: session.providerId,
-            status: { in: ["SCHEDULED", "IN_PROGRESS"] },
-            id: { not: id },
-            AND: [{ startTime: { lt: endTime } }, { endTime: { gt: startTime } }],
-          },
-        });
-        if (providerConflict) {
-          throw new Error("Provider already has a session scheduled during this time.");
+        // Provider check is skipped when this session has no provider.
+        if (session.providerId) {
+          const providerConflict = await tx.session.findFirst({
+            where: {
+              providerId: session.providerId,
+              status: { in: ["SCHEDULED", "IN_PROGRESS"] },
+              id: { not: id },
+              AND: [{ startTime: { lt: endTime } }, { endTime: { gt: startTime } }],
+            },
+          });
+          if (providerConflict) {
+            throw new Error("Provider already has a session scheduled during this time.");
+          }
         }
 
         const clientConflict = await tx.session.findFirst({
@@ -793,17 +813,19 @@ export async function rescheduleSession(
     }
   }
 
-  // Non-billable block — only re-check provider overlap
-  const providerOverlap = await prisma.session.findFirst({
-    where: {
-      providerId: session.providerId,
-      status: { in: ["SCHEDULED", "IN_PROGRESS"] },
-      id: { not: id },
-      AND: [{ startTime: { lt: endTime } }, { endTime: { gt: startTime } }],
-    },
-  });
-  if (providerOverlap) {
-    return { success: false, error: "Provider already has a session scheduled during this time." };
+  // Non-billable block — only re-check provider overlap (when there's a provider).
+  if (session.providerId) {
+    const providerOverlap = await prisma.session.findFirst({
+      where: {
+        providerId: session.providerId,
+        status: { in: ["SCHEDULED", "IN_PROGRESS"] },
+        id: { not: id },
+        AND: [{ startTime: { lt: endTime } }, { endTime: { gt: startTime } }],
+      },
+    });
+    if (providerOverlap) {
+      return { success: false, error: "Provider already has a session scheduled during this time." };
+    }
   }
 
   const updated = await prisma.session.update({

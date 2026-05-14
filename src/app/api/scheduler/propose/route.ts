@@ -342,8 +342,9 @@ export async function POST(request: NextRequest) {
     const isCancelledByProvider = cancelledBy === "PROVIDER";
     const isCancelledByClient   = cancelledBy === "CLIENT";
 
-    // Block provider time unless the CLIENT cancelled (client-cancelled sessions free the provider)
-    if (!isCancelledByClient) {
+    // Block provider time unless the CLIENT cancelled (client-cancelled sessions free the provider).
+    // Sessions without a provider (non-billable client blocks like a Nap) don't block any provider.
+    if (!isCancelledByClient && session.providerId) {
       if (!bookedByProvider[session.providerId]) bookedByProvider[session.providerId] = [];
       bookedByProvider[session.providerId].push({
         dayOfWeek,
@@ -367,6 +368,7 @@ export async function POST(request: NextRequest) {
   const providerWeeklyHoursMap: Record<string, number> = {};
   for (const s of bookedSessions) {
     if (s.status === "CANCELLED") continue;
+    if (!s.providerId) continue;
     const hrs = (s.endTime.getTime() - s.startTime.getTime()) / 3_600_000;
     providerWeeklyHoursMap[s.providerId] = (providerWeeklyHoursMap[s.providerId] ?? 0) + hrs;
   }
@@ -673,8 +675,9 @@ export async function POST(request: NextRequest) {
   // locationType = HOME, so sessionTypeId matching would silently exclude them.
   const existingHomeSessions = [...bookedSessions]
     .filter(
-      (s) =>
-        s.clientId &&
+      (s): s is typeof s & { providerId: string } =>
+        s.clientId !== null &&
+        s.providerId !== null &&
         s.locationType === "HOME" &&
         s.startTime >= targetDayStart &&
         s.startTime < targetDayEnd
@@ -703,8 +706,9 @@ export async function POST(request: NextRequest) {
 
   const freedProviderIds = bookedSessions
     .filter(
-      (s) =>
+      (s): s is typeof s & { providerId: string } =>
         s.cancelledBy === "CLIENT" &&
+        s.providerId !== null &&
         s.startTime >= targetDayStart &&
         s.startTime < targetDayEnd
     )

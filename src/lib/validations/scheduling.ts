@@ -233,18 +233,20 @@ export function validateCenterAssignment(
 // Provider and client must not have overlapping scheduled sessions.
 
 export async function validateNoOverlap(
-  providerId: string,
+  providerId: string | null,
   clientId: string | null,
   startTime: Date,
   endTime: Date,
   excludeSessionId?: string
 ): Promise<ValidationResult> {
-  const providerConflict = await getProviderSessionOverlap(providerId, startTime, endTime, excludeSessionId);
-  if (providerConflict) {
-    return {
-      valid: false,
-      reason: `Provider already has a session from ${formatDateTime(providerConflict.startTime)} to ${formatDateTime(providerConflict.endTime)}.`,
-    };
+  if (providerId) {
+    const providerConflict = await getProviderSessionOverlap(providerId, startTime, endTime, excludeSessionId);
+    if (providerConflict) {
+      return {
+        valid: false,
+        reason: `Provider already has a session from ${formatDateTime(providerConflict.startTime)} to ${formatDateTime(providerConflict.endTime)}.`,
+      };
+    }
   }
 
   if (clientId) {
@@ -401,10 +403,12 @@ export async function validateSession(params: {
     approvedHomeProviders: ApprovedHome[];
     authorizations: Authorization[];
   };
-  provider: Provider & {
+  // Provider is nullable: non-billable client blocks (e.g., Nap) can be
+  // saved without a provider. Provider-side checks are skipped when null.
+  provider: (Provider & {
     availability: ProviderAvailability[];
     blocks: ProviderBlock[];
-  };
+  }) | null;
   startTime: Date;
   endTime: Date;
   billable: boolean;
@@ -426,7 +430,7 @@ export async function validateSession(params: {
   const { client, provider, startTime, endTime, billable, serviceCode, sessionTypeName, timezone, excludeSessionId, locationType } = params;
 
   const [overlapResult, authorizationResult] = await Promise.all([
-    validateNoOverlap(provider.id, client.id, startTime, endTime, excludeSessionId),
+    validateNoOverlap(provider?.id ?? null, client.id, startTime, endTime, excludeSessionId),
     validateAuthorization(
       client.id,
       startTime,
@@ -440,25 +444,31 @@ export async function validateSession(params: {
     ),
   ]);
 
-  // Approved-provider list only applies to HOME sessions.
-  // At the center, any active qualified provider may work with any client.
+  // Approved-provider list only applies to HOME sessions with an assigned
+  // provider. At the center, any active qualified provider may work with any
+  // client; non-billable blocks without a provider skip the check entirely.
   const approvedProviderResult: ValidationResult =
-    locationType === "HOME"
+    locationType === "HOME" && provider
       ? validateApprovedProvider(client, provider, client.approvedHomeProviders)
       : { valid: true };
 
   const syncResults: ValidationResult[] = [
     validateSessionTime(startTime, endTime),
     validateClientNotTerminated(client, startTime, timezone),
-    validateRbtLevel(client, provider),
-    validateProviderAvailability(startTime, endTime, provider.availability, timezone),
-    validateProviderNotBlocked(startTime, endTime, provider.blocks, timezone),
     validateClientAvailability(startTime, endTime, client.availability, timezone),
-    validateSpanishRequirement(client, provider),
-    validateFemaleProviderOnly(client, provider),
     approvedProviderResult,
     overlapResult,
   ];
+
+  if (provider) {
+    syncResults.push(
+      validateRbtLevel(client, provider),
+      validateProviderAvailability(startTime, endTime, provider.availability, timezone),
+      validateProviderNotBlocked(startTime, endTime, provider.blocks, timezone),
+      validateSpanishRequirement(client, provider),
+      validateFemaleProviderOnly(client, provider),
+    );
+  }
 
   // Authorization result has a different shape — extract just the valid/reason part
   const authAsResult: ValidationResult = authorizationResult.valid
@@ -469,7 +479,7 @@ export async function validateSession(params: {
     (r): r is ValidationFailure => !r.valid
   );
 
-  const centerWarning = validateCenterAssignment(client, provider);
+  const centerWarning = provider ? validateCenterAssignment(client, provider) : null;
   const warnings: ValidationWarning[] = centerWarning ? [centerWarning] : [];
 
   const authorizationId =

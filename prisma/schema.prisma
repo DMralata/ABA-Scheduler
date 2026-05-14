@@ -192,7 +192,7 @@ model Session {
   id                 String           @id @default(cuid())
   name               String
   sessionTypeId      String
-  providerId         String
+  providerId         String?
   clientId           String?
   authorizationId    String?
   startTime          DateTime
@@ -213,7 +213,7 @@ model Session {
   authorization      Authorization?   @relation(fields: [authorizationId], references: [id])
   center             Center?          @relation(fields: [centerId], references: [id])
   client             Client?          @relation(fields: [clientId], references: [id])
-  provider           Provider         @relation(fields: [providerId], references: [id])
+  provider           Provider?        @relation(fields: [providerId], references: [id])
   recurringEvent     RecurringEvent?  @relation(fields: [recurringEventId], references: [id])
   sessionType        SessionType      @relation(fields: [sessionTypeId], references: [id])
 

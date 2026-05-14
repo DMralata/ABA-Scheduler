@@ -40,3 +40,8 @@ next-env.d.ts
 
 # netlify
 .netlify
+
+# PHI — real customer data, never commit
+/Import Data/
+/scripts/import-real-data/staged-import.json
+
