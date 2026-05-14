@@ -22,6 +22,7 @@ import { buildAllDriveTimeMaps } from "@/lib/scheduler/maps";
 import { schoolOriginIdFor, schoolToCenterDistance } from "@/lib/scheduler/schoolLocation";
 import { getWeekBoundaries } from "@/lib/utils";
 import type { SchedulerClient, SchedulerProvider } from "@/lib/scheduler/types";
+import { resolveSessionLength } from "@/lib/scheduler/sessionLength";
 import { getWeeklyHoursMap, getClientAvgWeeklyCancellationHours, SESSION_CONFLICT_STATUSES, SESSION_BILLABLE_STATUSES } from "@/lib/queries/sessions";
 import { getClientNameMasker } from "@/lib/maskClient";
 
@@ -167,14 +168,18 @@ export async function POST(request: NextRequest) {
       startTime: { gte: twelveWeeksAgo, lt: weekStart },
       status: { in: SESSION_BILLABLE_STATUSES },
     },
-    select: { clientId: true, providerId: true, startTime: true },
+    select: { clientId: true, providerId: true, startTime: true, endTime: true },
     orderBy: { startTime: "desc" },
   });
   const historicalByClient: Record<string, string[]> = {};
+  const historicalSessionsByClient: Record<string, { startTime: Date; endTime: Date }[]> = {};
   const priorWeekClientIds = new Set<string>();
   const oneWeekAgo = new Date(weekStart.getTime() - 7 * 24 * 3_600_000);
   for (const s of priorSessions) {
-    if (!s.clientId || !s.providerId) continue;
+    if (!s.clientId) continue;
+    if (!historicalSessionsByClient[s.clientId]) historicalSessionsByClient[s.clientId] = [];
+    historicalSessionsByClient[s.clientId].push({ startTime: s.startTime, endTime: s.endTime });
+    if (!s.providerId) continue;
     if (!historicalByClient[s.clientId]) historicalByClient[s.clientId] = [];
     if (!historicalByClient[s.clientId].includes(s.providerId)) {
       historicalByClient[s.clientId].push(s.providerId);
@@ -258,7 +263,8 @@ export async function POST(request: NextRequest) {
     const isCancelledByProvider = cancelledBy === "PROVIDER";
     const isCancelledByClient   = cancelledBy === "CLIENT";
 
-    if (!isCancelledByClient) {
+    // Sessions without a provider (non-billable client blocks) can't block any provider's time.
+    if (!isCancelledByClient && session.providerId) {
       if (!bookedByProvider[session.providerId]) bookedByProvider[session.providerId] = [];
       bookedByProvider[session.providerId].push({
         dayOfWeek, startTime: localStart, endTime: localEnd,
@@ -276,6 +282,7 @@ export async function POST(request: NextRequest) {
   const providerWeeklyHoursMap: Record<string, number> = {};
   for (const s of bookedSessions) {
     if (s.status === "CANCELLED") continue;
+    if (!s.providerId) continue;
     const hrs = (s.endTime.getTime() - s.startTime.getTime()) / 3_600_000;
     providerWeeklyHoursMap[s.providerId] = (providerWeeklyHoursMap[s.providerId] ?? 0) + hrs;
   }
@@ -295,6 +302,7 @@ export async function POST(request: NextRequest) {
 
   // ── Build scheduler input ────────────────────────────────────────────────────
   const maskClientName = await getClientNameMasker();
+  const sessionLengthWarnings: string[] = [];
   const schedulerClients: SchedulerClient[] = rawClients.map((c) => {
     const authInfo = clientAuthMap[c.id];
     const weeklyHours = authInfo?.weeklyHours ?? null;
@@ -302,28 +310,24 @@ export async function POST(request: NextRequest) {
     const targetHours = weeklyHours !== null
       ? effectiveTargetHours(weeklyHours, c.activeDate, avgCancellationMap[c.id] ?? 0)
       : null;
-    const remaining = targetHours !== null ? Math.max(0, targetHours - used) : null;
 
-    // Auth-derived cadence: split remaining hours across as few days as possible
-    // while keeping each session at or below MAX_SESSION_HOURS.
-    const daysNeeded = (() => {
-      if (remaining === null || remaining <= 0) return 1;
-      const raw = Math.ceil(remaining / MAX_SESSION_HOURS);
-      // Cap at the number of schedulable (Mon–Fri) days the client is actually available.
-      // Weekend availability is excluded — week mode only schedules Mon–Fri.
-      const SCHEDULABLE_DAYS = new Set(["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"]);
-      const availDays = new Set(c.availability.filter((a) => SCHEDULABLE_DAYS.has(a.dayOfWeek)).map((a) => a.dayOfWeek)).size;
-      return Math.max(1, Math.min(raw, availDays));
-    })();
-
-    const sessionHours = (() => {
-      if (remaining === null || remaining <= 0) {
-        return c.defaultSessionHours ?? center.defaultSessionHours;
-      }
-      const rawPerDay = remaining / daysNeeded;
-      const snapped = Math.round(rawPerDay * 2) / 2; // nearest 0.5h
-      return Math.max(snapped, MIN_SESSION_HOURS);
-    })();
+    // Session-length resolution: historical median when ≥4 weeks of history,
+    // otherwise fall back to math-derived sizing capped by daily window.
+    // Surfaces under-target and availability-ceiling warnings when applicable.
+    const sl = resolveSessionLength({
+      clientName: `${c.lastName}, ${c.firstName}`,
+      authorizedHoursPerWeek: targetHours,
+      usedHoursThisWeek: used,
+      availability: c.availability.map((a) => ({ dayOfWeek: a.dayOfWeek, startTime: a.startTime, endTime: a.endTime })),
+      historicalSessions: historicalSessionsByClient[c.id] ?? [],
+      weekStart,
+      defaultSessionHours: c.defaultSessionHours ?? center.defaultSessionHours,
+      minSessionHours: MIN_SESSION_HOURS,
+      maxSessionHours: MAX_SESSION_HOURS,
+    });
+    sessionLengthWarnings.push(...sl.warnings);
+    const sessionHours = sl.sessionHours;
+    const daysNeeded = sl.daysNeeded;
 
     return {
       id: c.id,
@@ -489,8 +493,9 @@ export async function POST(request: NextRequest) {
 
   const existingHomeSessions = bookedSessions
     .filter(
-      (s) =>
-        s.clientId &&
+      (s): s is typeof s & { providerId: string } =>
+        s.clientId !== null &&
+        s.providerId !== null &&
         s.locationType === "HOME" &&
         s.startTime >= todayDayStart &&
         s.startTime < notBefore // only sessions already locked in before the cutoff
@@ -520,7 +525,7 @@ export async function POST(request: NextRequest) {
     weekMode: true,
   });
 
-  const allWarnings = [...result.warnings];
+  const allWarnings = [...result.warnings, ...sessionLengthWarnings];
   if (driveTimeFailed) {
     allWarnings.push(`Drive time unavailable — Maps API error: ${driveTimeError || "unknown error"}. Sessions scheduled with minimum gap only.`);
   }

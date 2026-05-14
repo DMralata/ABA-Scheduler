@@ -9,6 +9,7 @@
 import { PrismaClient } from "@prisma/client";
 import type { DayOfWeek } from "@prisma/client";
 import { optimize, createWorkingState } from "../src/lib/scheduler/optimizer";
+import { resolveSessionLength } from "../src/lib/scheduler/sessionLength";
 import type { SchedulerClient, SchedulerProvider } from "../src/lib/scheduler/types";
 import { getWeekBoundaries } from "../src/lib/utils";
 
@@ -101,16 +102,22 @@ async function main() {
       + (s.endTime.getTime() - s.startTime.getTime()) / 3_600_000;
   }
 
-  // ── Historical provider preference ──────────────────────────────────────────
-  const fourWeeksAgo = new Date(weekStart.getTime() - 28 * 86_400_000);
+  // ── Historical provider preference + session-length pattern ─────────────────
+  // 12-week window matches production propose-week. Lookback for session-length
+  // inference (Patch B) needs ≥4 weeks of data to trust the median.
+  const twelveWeeksAgo = new Date(weekStart.getTime() - 84 * 86_400_000);
   const priorSessions = await prisma.session.findMany({
-    where: { clientId: { in: clientIds }, startTime: { gte: fourWeeksAgo, lt: weekStart }, status: { in: ["SCHEDULED","COMPLETED","IN_PROGRESS"] } },
-    select: { clientId: true, providerId: true, startTime: true },
+    where: { clientId: { in: clientIds }, startTime: { gte: twelveWeeksAgo, lt: weekStart }, status: { in: ["SCHEDULED","COMPLETED","IN_PROGRESS"] } },
+    select: { clientId: true, providerId: true, startTime: true, endTime: true },
     orderBy: { startTime: "desc" },
   });
   const historicalByClient: Record<string, string[]> = {};
+  const historicalSessionsByClient: Record<string, { startTime: Date; endTime: Date }[]> = {};
   for (const s of priorSessions) {
-    if (!s.clientId || !s.providerId) continue;
+    if (!s.clientId) continue;
+    if (!historicalSessionsByClient[s.clientId]) historicalSessionsByClient[s.clientId] = [];
+    historicalSessionsByClient[s.clientId].push({ startTime: s.startTime, endTime: s.endTime });
+    if (!s.providerId) continue;
     if (!historicalByClient[s.clientId]) historicalByClient[s.clientId] = [];
     if (!historicalByClient[s.clientId].includes(s.providerId)) historicalByClient[s.clientId].push(s.providerId);
   }
@@ -157,6 +164,7 @@ async function main() {
   const bookedByProvider: Record<string, Array<{ dayOfWeek: DayOfWeek; startTime: string; endTime: string }>> = {};
   const bookedByClient: Record<string, Array<{ dayOfWeek: DayOfWeek; startTime: string; endTime: string }>> = {};
   for (const s of [...bookedSessions, ...committedProposals]) {
+    if (!s.providerId) continue;
     const { dayOfWeek, time: st } = toLocalWindow(s.startTime, tz);
     const { time: et } = toLocalWindow(s.endTime, tz);
     if (!bookedByProvider[s.providerId]) bookedByProvider[s.providerId] = [];
@@ -173,6 +181,7 @@ async function main() {
   const existingHoursByProvider: Record<string, number> = {};
   for (const s of bookedSessions) {
     if (!s.billable) continue;
+    if (!s.providerId) continue;
     existingHoursByProvider[s.providerId] = (existingHoursByProvider[s.providerId] ?? 0)
       + (s.endTime.getTime() - s.startTime.getTime()) / 3_600_000;
   }
@@ -203,38 +212,30 @@ async function main() {
       + (p.endTime.getTime() - p.startTime.getTime()) / 3_600_000;
   }
 
+  const sessionLengthWarnings: string[] = [];
   const schedulerClients: SchedulerClient[] = rawClients.map(c => {
     const auth = clientAuthMap[c.id];
+    const used = auth ? (usedHoursMap[auth.authId] ?? 0) + (pendingHoursByClient[c.id] ?? 0) : 0;
+    const sl = resolveSessionLength({
+      clientName: `${c.lastName}, ${c.firstName}`,
+      authorizedHoursPerWeek: auth?.weeklyHours ?? null,
+      usedHoursThisWeek: used,
+      availability: c.availability.map((a) => ({ dayOfWeek: a.dayOfWeek, startTime: a.startTime, endTime: a.endTime })),
+      historicalSessions: historicalSessionsByClient[c.id] ?? [],
+      weekStart,
+      defaultSessionHours: c.defaultSessionHours ?? center.defaultSessionHours,
+      minSessionHours: MIN_SESSION_HOURS,
+      maxSessionHours: MAX_SESSION_HOURS,
+    });
+    sessionLengthWarnings.push(...sl.warnings);
     return {
       id: c.id,
       firstName: c.firstName,
       lastName: c.lastName,
       latitude: c.latitude,
       longitude: c.longitude,
-      daysNeeded: (() => {
-        const weeklyHours = auth?.weeklyHours ?? null;
-        const used = auth ? (usedHoursMap[auth.authId] ?? 0) + (pendingHoursByClient[c.id] ?? 0) : 0;
-        const remaining = weeklyHours !== null ? Math.max(0, weeklyHours - used) : null;
-        if (remaining === null || remaining <= 0) return 1;
-        const raw = Math.ceil(remaining / MAX_SESSION_HOURS);
-        const availDays = new Set(c.availability.map((a) => a.dayOfWeek)).size;
-        return Math.max(1, Math.min(raw, availDays));
-      })(),
-      sessionHours: (() => {
-        // Mirror propose-week/route.ts: auth-derived cadence formula
-        const weeklyHours = auth?.weeklyHours ?? null;
-        const used = auth ? (usedHoursMap[auth.authId] ?? 0) + (pendingHoursByClient[c.id] ?? 0) : 0;
-        const remaining = weeklyHours !== null ? Math.max(0, weeklyHours - used) : null;
-        if (remaining === null || remaining <= 0) {
-          return c.defaultSessionHours ?? center.defaultSessionHours;
-        }
-        const raw = Math.ceil(remaining / MAX_SESSION_HOURS);
-        const availDays = new Set(c.availability.map((a) => a.dayOfWeek)).size;
-        const daysNeeded = Math.max(1, Math.min(raw, availDays));
-        const rawPerDay = remaining / daysNeeded;
-        const snapped = Math.round(rawPerDay * 2) / 2;
-        return Math.max(snapped, MIN_SESSION_HOURS);
-      })(),
+      daysNeeded: sl.daysNeeded,
+      sessionHours: sl.sessionHours,
       minimumRbtLevel: c.minimumRbtLevel,
       femaleProviderOnly: c.femaleProviderOnly,
       spanish: c.spanish,
@@ -668,9 +669,10 @@ async function main() {
       }
     }
   }
-  if (result.warnings.length > 0) {
+  if (result.warnings.length > 0 || sessionLengthWarnings.length > 0) {
     console.log(`\nWARNINGS`);
     for (const w of result.warnings) console.log(`  ⚠  ${w}`);
+    for (const w of sessionLengthWarnings) console.log(`  ⚠  ${w}`);
   }
 
   console.log(`\n${"═".repeat(56)}\n`);
