@@ -114,7 +114,6 @@ export async function runScheduler(input: SchedulerInput): Promise<SchedulerOutp
   // Save valid proposals to the database
   const savedClientIds: string[] = [];
   const failedProposals: string[] = [];
-  const savedProposalIds: string[] = [];
 
   // Track ALL saved proposals with location type so we can create drive time
   // sessions between any consecutive pair that ends with a HOME session.
@@ -127,114 +126,146 @@ export async function runScheduler(input: SchedulerInput): Promise<SchedulerOutp
     locationType: "HOME" | "CENTER" | "SCHOOL";
   }> = [];
 
-  for (const proposal of result.proposals) {
+  // Validation pass: filter all proposals through the conflict checks, building a
+  // batch payload for a single createMany at the end. Replaces the prior per-proposal
+  // await prisma.create(), which was 150+ serial round-trips and tripped the Netlify
+  // 10s function timeout on full-week runs.
+  type ProposalRow = {
+    weekOf: Date;
+    clientId: string;
+    providerId: string;
+    sessionTypeId: string;
+    authorizationId: string | null;
+    startTime: Date;
+    endTime: Date;
+    timezone: string;
+    locationType: "HOME" | "CENTER" | "SCHOOL";
+    status: "PENDING";
+    reasoning: string | null;
+  };
+  const proposalBatch: ProposalRow[] = [];
+
+  for (const [idx, proposal] of result.proposals.entries()) {
+    let startTime: Date;
+    let endTime: Date;
     try {
-      const startTime = toUtcDateTime(
+      startTime = toUtcDateTime(
         input.weekOf,
         proposal.dayOfWeek as DayOfWeek,
         proposal.startTime,
         input.timezone
       );
-      const endTime = toUtcDateTime(
+      endTime = toUtcDateTime(
         input.weekOf,
         proposal.dayOfWeek as DayOfWeek,
         proposal.endTime,
         input.timezone
       );
-
-      // Sanity check — optimizer should never produce this, but guard anyway
-      if (endTime <= startTime) {
-        failedProposals.push(`${proposal.clientId}: end time not after start time`);
-        continue;
-      }
-
-      // Rest of Day mode: skip proposals that have already started
-      if (input.notBefore && startTime < input.notBefore) {
-        failedProposals.push(`${proposal.clientId}: slot already passed (Rest of Day mode)`);
-        continue;
-      }
-
-      // Guard against double-booking a client (in-memory check).
-      const existingClientProposal = preloadedProposals.find(
-        (p) =>
-          !thisRunIds.has(p.id) &&
-          p.clientId === proposal.clientId &&
-          overlaps(startTime, endTime, p.startTime, p.endTime)
-      );
-      if (existingClientProposal) {
-        failedProposals.push(
-          `${proposal.clientId}: overlaps an existing ${
-            existingClientProposal.id ? "pending/approved" : "unknown"
-          } proposal`
-        );
-        continue;
-      }
-
-      // Check for provider double-booking against SCHEDULED/IN_PROGRESS sessions (in-memory).
-      const providerConflict = preloadedSessions.find(
-        (s) =>
-          s.providerId === proposal.providerId &&
-          overlaps(startTime, endTime, s.startTime, s.endTime)
-      );
-      if (providerConflict) {
-        failedProposals.push(`${proposal.clientId}: provider conflict with existing session`);
-        continue;
-      }
-
-      // Check for provider double-booking against PENDING/APPROVED proposals (in-memory).
-      // Exclude proposals saved in this run — the optimizer's working state already
-      // prevents intra-run conflicts; re-checking them would cause cascade failures.
-      const providerProposalConflict = preloadedProposals.find(
-        (p) =>
-          !thisRunIds.has(p.id) &&
-          p.providerId === proposal.providerId &&
-          overlaps(startTime, endTime, p.startTime, p.endTime)
-      );
-      if (providerProposalConflict) {
-        failedProposals.push(`${proposal.clientId}: provider conflict with existing proposal`);
-        continue;
-      }
-
-      const saved = await prisma.proposedSession.create({
-        data: {
-          weekOf: input.weekOf,
-          clientId: proposal.clientId,
-          providerId: proposal.providerId,
-          sessionTypeId: proposal.sessionTypeId,
-          authorizationId: proposal.authorizationId,
-          startTime,
-          endTime,
-          timezone: input.timezone,
-          locationType: proposal.locationType,
-          status: "PENDING",
-          reasoning: proposal.reasoning,
-        },
-      });
-
-      savedProposalIds.push(saved.id);
-      thisRunIds.add(saved.id);
-      // Add to the in-memory set so subsequent proposals in this run see it
-      preloadedProposals.push({
-        id: saved.id,
-        providerId: proposal.providerId,
-        clientId: proposal.clientId,
-        startTime,
-        endTime,
-      });
-      savedClientIds.push(proposal.clientId);
-
-      // Track all proposals for drive-time session creation after the loop
-      savedDetails.push({
-        clientId: proposal.clientId,
-        providerId: proposal.providerId,
-        startTime,
-        endTime,
-        locationType: proposal.locationType,
-      });
     } catch (err) {
       failedProposals.push(
-        `${proposal.clientId}: ${err instanceof Error ? err.message : String(err)}`
+        `${proposal.clientId}: time conversion failed — ${err instanceof Error ? err.message : String(err)}`
       );
+      continue;
+    }
+
+    // Sanity check — optimizer should never produce this, but guard anyway
+    if (endTime <= startTime) {
+      failedProposals.push(`${proposal.clientId}: end time not after start time`);
+      continue;
+    }
+
+    // Rest of Day mode: skip proposals that have already started
+    if (input.notBefore && startTime < input.notBefore) {
+      failedProposals.push(`${proposal.clientId}: slot already passed (Rest of Day mode)`);
+      continue;
+    }
+
+    // Guard against double-booking a client (in-memory check).
+    const existingClientProposal = preloadedProposals.find(
+      (p) =>
+        !thisRunIds.has(p.id) &&
+        p.clientId === proposal.clientId &&
+        overlaps(startTime, endTime, p.startTime, p.endTime)
+    );
+    if (existingClientProposal) {
+      failedProposals.push(
+        `${proposal.clientId}: overlaps an existing ${
+          existingClientProposal.id ? "pending/approved" : "unknown"
+        } proposal`
+      );
+      continue;
+    }
+
+    // Check for provider double-booking against SCHEDULED/IN_PROGRESS sessions (in-memory).
+    const providerConflict = preloadedSessions.find(
+      (s) =>
+        s.providerId === proposal.providerId &&
+        overlaps(startTime, endTime, s.startTime, s.endTime)
+    );
+    if (providerConflict) {
+      failedProposals.push(`${proposal.clientId}: provider conflict with existing session`);
+      continue;
+    }
+
+    // Check for provider double-booking against PENDING/APPROVED proposals (in-memory).
+    // Exclude proposals staged in this run — the optimizer's working state already
+    // prevents intra-run conflicts; re-checking them would cause cascade failures.
+    const providerProposalConflict = preloadedProposals.find(
+      (p) =>
+        !thisRunIds.has(p.id) &&
+        p.providerId === proposal.providerId &&
+        overlaps(startTime, endTime, p.startTime, p.endTime)
+    );
+    if (providerProposalConflict) {
+      failedProposals.push(`${proposal.clientId}: provider conflict with existing proposal`);
+      continue;
+    }
+
+    // Stage for batch insert. Use a synthetic in-run ID so the cascade conflict
+    // checks for subsequent proposals see this one without needing a DB round-trip.
+    const syntheticId = `run-${idx}`;
+    thisRunIds.add(syntheticId);
+    preloadedProposals.push({
+      id: syntheticId,
+      providerId: proposal.providerId,
+      clientId: proposal.clientId,
+      startTime,
+      endTime,
+    });
+    savedClientIds.push(proposal.clientId);
+    savedDetails.push({
+      clientId: proposal.clientId,
+      providerId: proposal.providerId,
+      startTime,
+      endTime,
+      locationType: proposal.locationType,
+    });
+    proposalBatch.push({
+      weekOf: input.weekOf,
+      clientId: proposal.clientId,
+      providerId: proposal.providerId,
+      sessionTypeId: proposal.sessionTypeId,
+      authorizationId: proposal.authorizationId,
+      startTime,
+      endTime,
+      timezone: input.timezone,
+      locationType: proposal.locationType,
+      status: "PENDING",
+      reasoning: proposal.reasoning,
+    });
+  }
+
+  // Single round-trip insert. If the batch fails (FK violation, etc.), nothing saves —
+  // surface the error so the caller can react instead of silently dropping rows.
+  if (proposalBatch.length > 0) {
+    try {
+      await prisma.proposedSession.createMany({ data: proposalBatch });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      failedProposals.push(`Batch insert failed: ${msg}`);
+      // Roll back our in-memory bookkeeping so callers don't think these saved
+      savedClientIds.length = 0;
+      savedDetails.length = 0;
     }
   }
 
@@ -254,6 +285,22 @@ export async function runScheduler(input: SchedulerInput): Promise<SchedulerOutp
     ...savedDetails,
     ...(input.existingHomeSessions ?? []).map((s) => ({ ...s, locationType: "HOME" as const })),
   ];
+
+  // Drive-time inserts use the same batch pattern as proposals — the prior per-pair
+  // await prisma.session.create() also added measurable latency to large week runs.
+  type DriveTimeRow = {
+    name: string;
+    sessionTypeId: string;
+    providerId: string;
+    clientId: null;
+    startTime: Date;
+    endTime: Date;
+    timezone: string;
+    billable: false;
+    status: "SCHEDULED";
+    notes: string;
+  };
+  const driveTimeBatch: DriveTimeRow[] = [];
 
   if (input.driveTimeSessionTypeId && allDetails.length >= 2) {
     // Group by provider
@@ -372,25 +419,27 @@ export async function runScheduler(input: SchedulerInput): Promise<SchedulerOutp
           distanceMeters: distMeters,
         });
 
-        try {
-          await prisma.session.create({
-            data: {
-              name: "Drive Time",
-              sessionTypeId: input.driveTimeSessionTypeId,
-              providerId,
-              clientId: null,
-              startTime: from.endTime,
-              endTime: clampedEnd,
-              timezone: input.timezone,
-              billable: false,
-              status: "SCHEDULED",
-              notes: driveNotes,
-            },
-          });
-        } catch {
-          // Non-fatal — drive time session creation failure should not abort the run
-        }
+        driveTimeBatch.push({
+          name: "Drive Time",
+          sessionTypeId: input.driveTimeSessionTypeId,
+          providerId,
+          clientId: null,
+          startTime: from.endTime,
+          endTime: clampedEnd,
+          timezone: input.timezone,
+          billable: false,
+          status: "SCHEDULED",
+          notes: driveNotes,
+        });
       }
+    }
+  }
+
+  if (driveTimeBatch.length > 0) {
+    try {
+      await prisma.session.createMany({ data: driveTimeBatch });
+    } catch {
+      // Non-fatal — drive time session creation failure should not abort the run
     }
   }
 
