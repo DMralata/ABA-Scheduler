@@ -58,7 +58,7 @@ async function main() {
   const providerIds = centerProviders.map((p) => p.id);
   const clientIds = centerClients.map((c) => c.id);
 
-  const [weekSessions, weekProposals] = await Promise.all([
+  const [weekSessionsRaw, weekProposalsRaw] = await Promise.all([
     prisma.session.findMany({
       where: {
         providerId: { in: providerIds },
@@ -83,6 +83,16 @@ async function main() {
       select: { clientId: true, providerId: true, authorizationId: true, startTime: true, endTime: true },
     }),
   ]);
+
+  // Audit pipeline assumes provider is present; drop sessions/proposals without one.
+  type SessionWithProvider = (typeof weekSessionsRaw)[number] & { providerId: string; provider: NonNullable<(typeof weekSessionsRaw)[number]["provider"]> };
+  const weekSessions: SessionWithProvider[] = weekSessionsRaw.filter(
+    (s): s is SessionWithProvider => s.providerId !== null && s.provider !== null
+  );
+  type ProposalWithProvider = (typeof weekProposalsRaw)[number] & { providerId: string };
+  const weekProposals: ProposalWithProvider[] = weekProposalsRaw.filter(
+    (p): p is ProposalWithProvider => p.providerId !== null
+  );
 
   const driveTimeSessions = weekSessions.filter((s) => s.sessionType?.name === "Drive Time");
   const therapySessions = weekSessions.filter((s) => s.sessionType?.name !== "Drive Time");
@@ -293,7 +303,7 @@ async function main() {
     });
     const priorProviderByClient = new Map<string, string>();
     for (const s of priorSessions) {
-      if (!s.clientId || priorProviderByClient.has(s.clientId)) continue;
+      if (!s.clientId || !s.providerId || priorProviderByClient.has(s.clientId)) continue;
       priorProviderByClient.set(s.clientId, s.providerId);
     }
     let consistent = 0, total = 0;

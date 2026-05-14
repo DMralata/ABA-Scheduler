@@ -218,6 +218,7 @@ async function main() {
   const bookedByProvider: Record<string, Array<{ dayOfWeek: DayOfWeek; startTime: string; endTime: string }>> = {};
   const bookedByClient: Record<string, Array<{ dayOfWeek: DayOfWeek; startTime: string; endTime: string }>> = {};
   for (const s of [...bookedSessions, ...approvedProposals]) {
+    if (!s.providerId) continue;
     const { dayOfWeek, time: st } = toLocalWindow(s.startTime, tz);
     const { time: et } = toLocalWindow(s.endTime, tz);
     if (!bookedByProvider[s.providerId]) bookedByProvider[s.providerId] = [];

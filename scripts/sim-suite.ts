@@ -252,6 +252,7 @@ async function loadDBContext(targetDate: Date): Promise<DBContext> {
   const bookedByProvider: Record<string, Array<{ dayOfWeek: DayOfWeek; startTime: string; endTime: string }>> = {};
   const bookedByClient: Record<string, Array<{ dayOfWeek: DayOfWeek; startTime: string; endTime: string }>> = {};
   for (const s of [...bookedSessions, ...approvedProposals]) {
+    if (!s.providerId) continue;
     const dow = localDOW(s.startTime);
     const st = localHHMM(s.startTime);
     const et = localHHMM(s.endTime);

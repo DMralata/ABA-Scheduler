@@ -180,7 +180,7 @@ async function main() {
     const isCancelledByProvider = cancelledBy === "PROVIDER";
     const isCancelledByClient = cancelledBy === "CLIENT";
 
-    if (!isCancelledByClient) {
+    if (!isCancelledByClient && session.providerId) {
       if (!bookedByProvider[session.providerId]) bookedByProvider[session.providerId] = [];
       bookedByProvider[session.providerId].push({
         dayOfWeek, startTime: localStart, endTime: localEnd,
@@ -197,6 +197,7 @@ async function main() {
   const providerWeeklyHoursMap: Record<string, number> = {};
   for (const s of bookedSessions) {
     if (s.status === "CANCELLED") continue;
+    if (!s.providerId) continue;
     const hrs = (s.endTime.getTime() - s.startTime.getTime()) / 3_600_000;
     providerWeeklyHoursMap[s.providerId] = (providerWeeklyHoursMap[s.providerId] ?? 0) + hrs;
   }

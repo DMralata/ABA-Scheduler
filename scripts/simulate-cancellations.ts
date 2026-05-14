@@ -115,7 +115,7 @@ async function buildWeekInput(
   mondayDate: string,
   sessionTypeIds: { CENTER: string; HOME: string; SCHOOL: string },
   driveTimeSessionTypeId: string | null,
-  overrideBookedSessions?: Array<{ providerId: string; clientId: string | null; startTime: Date; endTime: Date; status: string; cancelledBy: string | null; sessionTypeId?: string }>
+  overrideBookedSessions?: Array<{ providerId: string | null; clientId: string | null; startTime: Date; endTime: Date; status: string; cancelledBy: string | null; sessionTypeId?: string; locationType?: string | null }>
 ): Promise<SchedulerInput> {
   const [rawClients, allAuths, rawProviders, sessionTypes] = await Promise.all([
     prisma.client.findMany({
@@ -228,7 +228,7 @@ async function buildWeekInput(
     const localEnd   = localHHMM(s.endTime);
     const isCancelledByProvider = s.cancelledBy === "PROVIDER";
     const isCancelledByClient   = s.cancelledBy === "CLIENT";
-    if (!isCancelledByClient) {
+    if (!isCancelledByClient && s.providerId) {
       if (!bookedByProvider[s.providerId]) bookedByProvider[s.providerId] = [];
       bookedByProvider[s.providerId].push({ dayOfWeek: dow, startTime: localStart, endTime: localEnd, clientId: s.clientId ?? undefined, locationType: (s as { locationType?: "HOME" | "CENTER" }).locationType ?? undefined });
     }

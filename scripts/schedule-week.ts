@@ -209,7 +209,7 @@ async function scheduleDay(dateStr: string, centerId: string) {
     const isCancelledByProvider = cancelledBy === "PROVIDER";
     const isCancelledByClient = cancelledBy === "CLIENT";
 
-    if (!isCancelledByClient) {
+    if (!isCancelledByClient && session.providerId) {
       if (!bookedByProvider[session.providerId]) bookedByProvider[session.providerId] = [];
       bookedByProvider[session.providerId].push({
         dayOfWeek,
@@ -228,6 +228,7 @@ async function scheduleDay(dateStr: string, centerId: string) {
   const providerWeeklyHoursMap: Record<string, number> = {};
   for (const s of bookedSessions) {
     if (s.status === "CANCELLED") continue;
+    if (!s.providerId) continue;
     const hrs = (s.endTime.getTime() - s.startTime.getTime()) / 3_600_000;
     providerWeeklyHoursMap[s.providerId] = (providerWeeklyHoursMap[s.providerId] ?? 0) + hrs;
   }
@@ -380,7 +381,7 @@ async function scheduleDay(dateStr: string, centerId: string) {
   }
 
   const existingHomeSessions = [...bookedSessions]
-    .filter((s) => s.clientId && s.locationType === "HOME" && s.startTime >= targetDayStart && s.startTime < targetDayEnd)
+    .filter((s): s is typeof s & { providerId: string } => s.clientId !== null && s.providerId !== null && s.locationType === "HOME" && s.startTime >= targetDayStart && s.startTime < targetDayEnd)
     .map((s) => ({ providerId: s.providerId, clientId: s.clientId!, startTime: s.startTime, endTime: s.endTime }));
 
   const result = await runScheduler({

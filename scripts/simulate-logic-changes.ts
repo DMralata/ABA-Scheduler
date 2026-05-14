@@ -528,7 +528,7 @@ async function main() {
     const lst = toLocalTime(s.startTime, tz);
     const let_ = toLocalTime(s.endTime, tz);
     const cancelledBy = "cancelledBy" in s ? s.cancelledBy : null;
-    if (cancelledBy !== "CLIENT") {
+    if (cancelledBy !== "CLIENT" && s.providerId) {
       if (!bookedByProvider[s.providerId]) bookedByProvider[s.providerId] = [];
       bookedByProvider[s.providerId].push({ dayOfWeek: dow, startTime: lst, endTime: let_, clientId: s.clientId ?? undefined, locationType: s.locationType ?? undefined });
     }
@@ -542,6 +542,7 @@ async function main() {
   const providerWeeklyHoursMap: Record<string, number> = {};
   for (const s of bookedSessions) {
     if (s.status === "CANCELLED") continue;
+    if (!s.providerId) continue;
     providerWeeklyHoursMap[s.providerId] = (providerWeeklyHoursMap[s.providerId] ?? 0)
       + (s.endTime.getTime() - s.startTime.getTime()) / 3_600_000;
   }
