@@ -14,25 +14,31 @@ export async function writeAuditLog(params: {
   resourceType: string; // "Client" | "Session" | "Authorization" | "Provider" | "ApprovedHome" | etc.
   resourceId: string;
   metadata?: Record<string, unknown>;
+  // Optional pre-resolved user id. Callers that already authed via requireUser()
+  // can pass it through to skip a redundant Supabase auth roundtrip.
+  userId?: string;
 }): Promise<void> {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      // Actions should only be reachable by authenticated users.
-      // If this fires, something bypassed auth — flag it loudly.
-      console.error(
-        `[AuditLog] Unauthenticated write attempt: ${params.action} ${params.resourceType}/${params.resourceId}`
-      );
-      return;
+    let userId = params.userId;
+    if (!userId) {
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        // Actions should only be reachable by authenticated users.
+        // If this fires, something bypassed auth — flag it loudly.
+        console.error(
+          `[AuditLog] Unauthenticated write attempt: ${params.action} ${params.resourceType}/${params.resourceId}`
+        );
+        return;
+      }
+      userId = user.id;
     }
 
     await prisma.auditLog.create({
       data: {
-        userId: user.id,
+        userId,
         action: params.action,
         resourceType: params.resourceType,
         resourceId: params.resourceId,

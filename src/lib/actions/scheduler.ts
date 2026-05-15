@@ -10,13 +10,13 @@ import { writeAuditLog } from "@/lib/audit";
 import { getWeekBoundaries } from "@/lib/utils";
 import { requireUser } from "@/lib/auth";
 
-export async function approveProposedSession(proposalId: string): Promise<
-  | { success: true; sessionId: string }
+// Core approval logic — runs the conflict re-checks, creates the Session, and
+// updates the proposal. Shared by both the single-proposal action and the batch
+// action so the per-proposal transaction stays identical in either path.
+async function approveProposalCore(proposalId: string): Promise<
+  | { success: true; sessionId: string; clientId: string | null; providerId: string }
   | { success: false; error: string }
 > {
-  const auth = await requireUser();
-  if (!auth.ok) return { success: false, error: auth.error };
-
   const proposal = await prisma.proposedSession.findUnique({
     where: { id: proposalId },
     include: {
@@ -164,25 +164,120 @@ export async function approveProposedSession(proposalId: string): Promise<
       return session;
     });
 
-    await writeAuditLog({
-      action: "CREATE",
-      resourceType: "Session",
-      resourceId: result.id,
-      metadata: {
-        fromProposalId: proposalId,
-        clientId: proposal.clientId,
-        providerId: proposal.providerId,
-      },
-    });
-
-    revalidatePath("/schedule");
-    revalidatePath("/schedule/propose");
-
-    return { success: true, sessionId: result.id };
+    return {
+      success: true,
+      sessionId: result.id,
+      clientId: proposal.clientId,
+      providerId: proposal.providerId,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to approve session.";
     return { success: false, error: message };
   }
+}
+
+export async function approveProposedSession(proposalId: string): Promise<
+  | { success: true; sessionId: string }
+  | { success: false; error: string }
+> {
+  const auth = await requireUser();
+  if (!auth.ok) return { success: false, error: auth.error };
+
+  const result = await approveProposalCore(proposalId);
+  if (!result.success) return result;
+
+  await writeAuditLog({
+    action: "CREATE",
+    resourceType: "Session",
+    resourceId: result.sessionId,
+    userId: auth.userId,
+    metadata: {
+      fromProposalId: proposalId,
+      clientId: result.clientId,
+      providerId: result.providerId,
+    },
+  });
+
+  revalidatePath("/schedule");
+  revalidatePath("/schedule/propose");
+
+  return { success: true, sessionId: result.sessionId };
+}
+
+// Batched approval — same per-proposal logic as approveProposedSession, but
+// done in one server roundtrip with a single auth check, one revalidatePath at
+// the end, and audit logs batched into a single createMany. Used by the
+// "Approve all" button so 30+ proposals don't fan out to 30+ separate server
+// actions. Proposals are processed serially so each ATI re-check inside the
+// per-proposal transaction sees the committed state of the previous approval.
+export async function approveAllProposedSessions(
+  proposalIds: string[]
+): Promise<{
+  approved: { proposalId: string; sessionId: string }[];
+  failed: { proposalId: string; error: string }[];
+}> {
+  const auth = await requireUser();
+  if (!auth.ok) {
+    return {
+      approved: [],
+      failed: proposalIds.map((id) => ({ proposalId: id, error: auth.error })),
+    };
+  }
+
+  const approved: { proposalId: string; sessionId: string }[] = [];
+  const failed: { proposalId: string; error: string }[] = [];
+  const auditEntries: {
+    userId: string;
+    action: "CREATE";
+    resourceType: string;
+    resourceId: string;
+    metadata: Record<string, unknown>;
+  }[] = [];
+
+  for (const proposalId of proposalIds) {
+    const result = await approveProposalCore(proposalId);
+    if (result.success) {
+      approved.push({ proposalId, sessionId: result.sessionId });
+      auditEntries.push({
+        userId: auth.userId,
+        action: "CREATE",
+        resourceType: "Session",
+        resourceId: result.sessionId,
+        metadata: {
+          fromProposalId: proposalId,
+          clientId: result.clientId,
+          providerId: result.providerId,
+        },
+      });
+    } else {
+      failed.push({ proposalId, error: result.error });
+    }
+  }
+
+  // One batched audit-log insert instead of N round-trips. Failures are
+  // swallowed because HIPAA logging is best-effort and must not block.
+  if (auditEntries.length > 0) {
+    try {
+      await prisma.auditLog.createMany({
+        data: auditEntries.map((e) => ({
+          userId: e.userId,
+          action: e.action,
+          resourceType: e.resourceType,
+          resourceId: e.resourceId,
+          metadata: JSON.parse(JSON.stringify(e.metadata)),
+        })),
+      });
+    } catch (err) {
+      console.error("[AuditLog] Batched approval audit log failed:", err);
+    }
+  }
+
+  if (approved.length > 0) {
+    revalidatePath("/schedule");
+    revalidatePath("/schedule/propose");
+  }
+
+  return { approved, failed };
 }
 
 export async function rejectProposedSession(
@@ -219,6 +314,7 @@ export async function rejectProposedSession(
     action: "UPDATE",
     resourceType: "ProposedSession",
     resourceId: proposalId,
+    userId: auth.userId,
     metadata: { action: "REJECT", rejectionReason: rejectionReason ?? null },
   });
 
