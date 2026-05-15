@@ -156,8 +156,11 @@ export async function getMakeupSuggestions(
   if (!activeAuth) return null;
 
   // Sum billable hours for this client this week, excluding the cancelled session.
-  // Includes PENDING and APPROVED proposals so headroom reflects hours already
-  // spoken for even if the scheduler hasn't formally accepted them yet.
+  // Includes in-flight PENDING/APPROVED proposals so headroom reflects hours
+  // already spoken for. sessionId IS NULL filters out APPROVED proposals that
+  // have already been materialized into a Session — without this, the approved
+  // proposal AND its backing session would both count, halving the apparent
+  // headroom. Matches the pattern in getClientBillableHoursForWeek.
   const [weekSessions, weekProposals] = await Promise.all([
     prisma.session.findMany({
       where: {
@@ -173,6 +176,7 @@ export async function getMakeupSuggestions(
       where: {
         clientId: client.id,
         status: { in: ["PENDING", "APPROVED"] },
+        sessionId: null,
         startTime: { gte: weekStart, lt: weekEnd },
       },
       select: { startTime: true, endTime: true },
