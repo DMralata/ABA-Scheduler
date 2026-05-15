@@ -280,20 +280,18 @@ export async function approveAllProposedSessions(
   return { approved, failed };
 }
 
-// Convenience wrapper for the schedule dock's "Accept all" button. Finds every
-// PENDING proposal in the given date range whose provider belongs to the center
-// (mirrors the filter used by clearDayProposals/clearWeekProposals) and runs
-// them through approveAllProposedSessions.
-export async function approveAllProposalsInRange(
+// Lightweight lookup for the schedule dock's "Accept all" flow. The client
+// fetches the proposal IDs in range, then approves them in small chunks via
+// approveAllProposedSessions so no single server request approaches Netlify's
+// 10s function timeout. (A single big batch was hitting the timeout, silently
+// half-approving and leaving the UI stale.)
+export async function listPendingProposalsInRange(
   startDate: Date,
   endDate: Date,
   centerId: string
-): Promise<{
-  approved: { proposalId: string; sessionId: string }[];
-  failed: { proposalId: string; error: string }[];
-}> {
+): Promise<{ ids: string[] }> {
   const auth = await requireUser();
-  if (!auth.ok) return { approved: [], failed: [] };
+  if (!auth.ok) return { ids: [] };
 
   const centerProviders = await prisma.provider.findMany({
     where: { OR: [{ centerId }, { centerId: null }] },
@@ -310,10 +308,7 @@ export async function approveAllProposalsInRange(
     select: { id: true },
     orderBy: { startTime: "asc" },
   });
-
-  if (pending.length === 0) return { approved: [], failed: [] };
-
-  return approveAllProposedSessions(pending.map((p) => p.id));
+  return { ids: pending.map((p) => p.id) };
 }
 
 export async function rejectProposedSession(

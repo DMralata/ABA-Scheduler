@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { Sparkles, ChevronLeft, ChevronRight, Trash2, ChevronDown, BarChart2, Undo2, X, GripVertical, Check } from "lucide-react";
 import { WeekAnalysisModal } from "./WeekAnalysisModal";
 import type { AuditData } from "./WeekAnalysisModal";
-import { clearDaySchedule, clearDayUnbillable, clearDayProposals, clearWeekProposals, approveAllProposalsInRange } from "@/lib/actions/scheduler";
+import { clearDaySchedule, clearDayUnbillable, clearDayProposals, clearWeekProposals, listPendingProposalsInRange, approveAllProposedSessions } from "@/lib/actions/scheduler";
 import { ResourceTimeline } from "./ResourceTimeline";
 import { SessionTypePalette } from "./SessionTypePalette";
 import { SessionModal } from "./SessionModal";
@@ -406,8 +406,10 @@ export function ScheduleWorkspace({ clients, providers, sessionTypes, centers, c
   }
 
   // Accept every PENDING proposal currently visible in the day or week view.
-  // The server action batches them in one round-trip and serializes the
-  // per-proposal transactions so each ATI re-check sees committed state.
+  // Chunked client-side so no single server request approaches Netlify's 10s
+  // function timeout (one big batch was timing out, half-approving the set,
+  // and leaving the UI stale). Each chunk preserves the ATI re-check invariant
+  // server-side (serial per-proposal transactions inside the chunk).
   async function handleAcceptAll() {
     if (!centerId) { setAutoMessage("No center configured."); return; }
     setAcceptAllRunning(true);
@@ -419,20 +421,32 @@ export function ScheduleWorkspace({ clients, providers, sessionTypes, centers, c
       ? computeDayBoundaries(weekDates[4], timezone).dayEnd
       : computeDayBoundaries(currentDate, timezone).dayEnd;
     try {
-      const result = await approveAllProposalsInRange(start, end, centerId);
-      const okCount = result.approved.length;
-      const failCount = result.failed.length;
-      if (okCount === 0 && failCount === 0) {
+      const { ids } = await listPendingProposalsInRange(start, end, centerId);
+      if (ids.length === 0) {
         setAutoMessage("No proposals to accept");
-      } else {
-        const parts: string[] = [];
-        parts.push(`${okCount} proposal${okCount !== 1 ? "s" : ""} accepted`);
-        if (failCount > 0) parts.push(`${failCount} failed`);
-        setAutoMessage(parts.join(" · "));
+        setRefreshKey(k => k + 1);
+        return;
       }
-      setRefreshKey(k => k + 1);
+      const CHUNK_SIZE = 8;
+      let okCount = 0;
+      let failCount = 0;
+      for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        const chunk = ids.slice(i, i + CHUNK_SIZE);
+        const done = Math.min(i + CHUNK_SIZE, ids.length);
+        setAutoMessage(`Accepting ${done} / ${ids.length}…`);
+        const result = await approveAllProposedSessions(chunk);
+        okCount += result.approved.length;
+        failCount += result.failed.length;
+        // Refresh between chunks so the user sees blocks turn from proposed
+        // to scheduled as the batch progresses, not all at once at the end.
+        setRefreshKey(k => k + 1);
+      }
+      const parts: string[] = [`${okCount} proposal${okCount !== 1 ? "s" : ""} accepted`];
+      if (failCount > 0) parts.push(`${failCount} failed`);
+      setAutoMessage(parts.join(" · "));
     } catch {
       setAutoMessage("Could not accept proposals.");
+      setRefreshKey(k => k + 1);
     } finally {
       setAcceptAllRunning(false);
     }

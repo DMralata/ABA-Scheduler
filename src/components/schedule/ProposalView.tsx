@@ -239,31 +239,39 @@ export function ProposalView({ weekOf, centerId, timezone = "America/New_York", 
       });
   }
 
-  // Send the full set of proposal IDs to a single server action. The server
-  // still processes them serially so each ATI re-check inside the per-proposal
-  // transaction sees the committed state of the previous approval, but the
-  // batched action eliminates ~30 network roundtrips + auth re-checks + per-
-  // call revalidatePath calls that made the old client-side loop laggy.
+  // Chunk approvals client-side so no single server request approaches
+  // Netlify's 10s function timeout. Each chunk runs server-side as one batch
+  // (one auth check, audit-log createMany, single revalidatePath) and still
+  // serializes per-proposal transactions internally to preserve the ATI
+  // re-check invariant. UI state updates after each chunk so the list shrinks
+  // visibly as the batch progresses.
   async function handleApproveAll() {
     setIsPending(true);
     const ids = proposals.map((p) => p.id);
-    const result = await approveAllProposedSessions(ids);
-    const approvedSet = new Set(result.approved.map((r) => r.proposalId));
-    const errorById = new Map(result.failed.map((r) => [r.proposalId, r.error]));
-    setApprovedIds((prev) => {
-      const next = new Set(prev);
-      for (const id of approvedSet) next.add(id);
-      return next;
-    });
-    setProposals((prev) => prev.filter((p) => !approvedSet.has(p.id)));
-    if (errorById.size > 0) {
-      setActionErrors((prev) => {
-        const next = { ...prev };
-        for (const [id, err] of errorById) next[id] = err;
-        return next;
-      });
+    const CHUNK_SIZE = 8;
+    try {
+      for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        const chunk = ids.slice(i, i + CHUNK_SIZE);
+        const result = await approveAllProposedSessions(chunk);
+        const approvedSet = new Set(result.approved.map((r) => r.proposalId));
+        const errorById = new Map(result.failed.map((r) => [r.proposalId, r.error]));
+        setApprovedIds((prev) => {
+          const next = new Set(prev);
+          for (const id of approvedSet) next.add(id);
+          return next;
+        });
+        setProposals((prev) => prev.filter((p) => !approvedSet.has(p.id)));
+        if (errorById.size > 0) {
+          setActionErrors((prev) => {
+            const next = { ...prev };
+            for (const [id, err] of errorById) next[id] = err;
+            return next;
+          });
+        }
+      }
+    } finally {
+      setIsPending(false);
     }
-    setIsPending(false);
   }
 
   const pendingCount = proposals.length;
