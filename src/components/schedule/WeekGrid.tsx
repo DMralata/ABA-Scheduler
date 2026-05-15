@@ -72,6 +72,23 @@ export function WeekGrid({
   // don't flash the loading screen — only week/center navigation does.
   const loadedWeekRef = useRef<string | null>(null);
 
+  // Auto-size the sticky name column to the longest entity in this dataset so
+  // long names like "Urbina Perez, Geoffrey Emanuel" don't overflow the cell.
+  // 11px name font ≈ 6.1px/char, 8px position suffix ≈ 4.4px/char, +6px gap
+  // when a position is present, +28px for px-3 padding + sticky right border.
+  // Clamped 140-280px so the column never collapses or eats the day columns.
+  const labelColW = (() => {
+    if (entities.length === 0) return 160;
+    let widest = 0;
+    for (const e of entities) {
+      const nameLen = `${e.lastName}, ${e.firstName}`.length;
+      const posLen = e.position ? e.position.length : 0;
+      const w = nameLen * 6.1 + posLen * 4.4 + (posLen > 0 ? 6 : 0) + 28;
+      if (w > widest) widest = w;
+    }
+    return Math.max(140, Math.min(280, Math.ceil(widest)));
+  })();
+
   async function handleApproveProposal(proposalId: string) {
     // Optimistic: remove the proposal immediately so the UI feels instant.
     setEvents(prev => prev.filter(ev => ev.proposalId !== proposalId));
@@ -227,7 +244,7 @@ export function WeekGrid({
           <tr className="border-b border-border">
             <th
               className="text-left px-3 py-2 text-[10px] font-medium text-muted-foreground uppercase tracking-wide border-r border-border sticky left-0 bg-background"
-              style={{ width: 160, minWidth: 160 }}
+              style={{ width: labelColW, minWidth: labelColW }}
             >
               Name
             </th>
@@ -293,7 +310,7 @@ export function WeekGrid({
             <tr key={entity.id} className="border-b hover:bg-muted/10 transition-colors" style={{ borderColor: "rgba(15,15,12,0.04)", background: i % 2 === 1 ? "rgba(15,15,12,0.025)" : "transparent" }}>
               <td
                 className="px-3 pt-1.5 pb-2 font-medium text-[11px] sticky left-0 border-r border-border whitespace-nowrap align-middle"
-                style={{ minWidth: 160, background: i % 2 === 1 ? "var(--ata-gray-50)" : "var(--background)" }}
+                style={{ width: labelColW, minWidth: labelColW, background: i % 2 === 1 ? "var(--ata-gray-50)" : "var(--background)" }}
               >
                 <ProfileSheet entityId={entity.id} entityType="client">
                   {entity.lastName}, {entity.firstName}
@@ -343,7 +360,7 @@ export function WeekGrid({
             <tr key={entity.id} className="border-b hover:bg-muted/10 transition-colors" style={{ borderColor: "rgba(15,15,12,0.04)", background: i % 2 === 1 ? "rgba(15,15,12,0.025)" : "transparent" }}>
               <td
                 className="px-3 pt-1.5 pb-2 font-medium text-[11px] sticky left-0 border-r border-border whitespace-nowrap align-middle"
-                style={{ minWidth: 160, background: i % 2 === 1 ? "var(--ata-gray-50)" : "var(--background)" }}
+                style={{ width: labelColW, minWidth: labelColW, background: i % 2 === 1 ? "var(--ata-gray-50)" : "var(--background)" }}
               >
                 <ProfileSheet entityId={entity.id} entityType="provider">
                   <span className="truncate leading-none">

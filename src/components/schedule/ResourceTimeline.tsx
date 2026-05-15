@@ -36,8 +36,27 @@ const HOUR_PX = 72;               // px per hour — 15-min snap = 18 px
 const SNAP_MIN = 15;
 const SNAP_PX = (SNAP_MIN / 60) * HOUR_PX; // 25 px at HOUR_PX=100
 const ROW_H = 24;
-const LABEL_W = 160;
+const LABEL_W_MIN = 140;
+const LABEL_W_MAX = 280;
 const TOTAL_W = HOURS * HOUR_PX; // 720 px
+
+// Estimate the sticky label-column width from the longest entity name in the
+// current dataset. Avoids long names ("Urbina Perez, Geoffrey Emanuel")
+// truncating or overflowing the fixed 160px column. Sized for the 10px name
+// font + 8px position suffix used in row labels below; clamped so the timeline
+// never loses too much horizontal space.
+function computeLabelW(entities: { firstName: string; lastName: string; position?: string | null }[]): number {
+  if (entities.length === 0) return LABEL_W_MIN;
+  let widest = 0;
+  for (const e of entities) {
+    const nameLen = `${e.lastName}, ${e.firstName}`.length;
+    const posLen = e.position ? e.position.length : 0;
+    // 10px font ≈ 5.6px/char, 8px position ≈ 4.4px/char, +6px gap between, +24px padding+border
+    const w = nameLen * 5.6 + posLen * 4.4 + (posLen > 0 ? 6 : 0) + 24;
+    if (w > widest) widest = w;
+  }
+  return Math.max(LABEL_W_MIN, Math.min(LABEL_W_MAX, Math.ceil(widest)));
+}
 
 // ── Time helpers ────────────────────────────────────────────────────────────
 function getLocalHM(d: Date, tz: string) {
@@ -518,6 +537,9 @@ export function ResourceTimeline({ entities, currentDate, timezone, centerId, ac
   const scrollRef = useRef<HTMLDivElement>(null);
   const [blockMenu, setBlockMenu] = useState<{ x: number; y: number; ev: FetchedEvent } | null>(null);
   const [blockMenuLoading, setBlockMenuLoading] = useState(false);
+
+  // Sticky label column width, sized to the longest entity name in this dataset.
+  const LABEL_W = computeLabelW(entities);
 
   const handleBlockContextMenu = useCallback((e: React.MouseEvent, ev: FetchedEvent) => {
     setBlockMenu({ x: e.clientX, y: e.clientY, ev });
