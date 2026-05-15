@@ -728,7 +728,7 @@ export async function POST(request: NextRequest) {
     schoolOriginId,
     clients: schedulerClients,
     providers: schedulerProviders,
-    sessionTypeIds: { CENTER: defaultSessionType.id, HOME: homeSessionTypeId, SCHOOL: defaultSessionType.id },
+    sessionTypeIds: { CENTER: defaultSessionType.id, HOME: homeSessionTypeId, SCHOOL: defaultSessionType.id, DAYCARE: defaultSessionType.id },
     driveTimeSessionTypeId: driveTimeSessionType?.id ?? null,
     driveMinutes,
     distanceMeters,

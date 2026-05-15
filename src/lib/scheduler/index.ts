@@ -123,7 +123,7 @@ export async function runScheduler(input: SchedulerInput): Promise<SchedulerOutp
     providerId: string;
     startTime: Date;
     endTime: Date;
-    locationType: "HOME" | "CENTER" | "SCHOOL";
+    locationType: "HOME" | "CENTER" | "SCHOOL" | "DAYCARE";
   }> = [];
 
   // Validation pass: filter all proposals through the conflict checks, building a
@@ -139,7 +139,7 @@ export async function runScheduler(input: SchedulerInput): Promise<SchedulerOutp
     startTime: Date;
     endTime: Date;
     timezone: string;
-    locationType: "HOME" | "CENTER" | "SCHOOL";
+    locationType: "HOME" | "CENTER" | "SCHOOL" | "DAYCARE";
     status: "PENDING";
     reasoning: string | null;
   };

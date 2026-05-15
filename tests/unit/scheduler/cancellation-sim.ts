@@ -51,7 +51,7 @@ function makeInput(
     centerId: null,
     clients,
     providers,
-    sessionTypeIds: { CENTER: "dt-center", HOME: "dt-home", SCHOOL: "dt-center" },
+    sessionTypeIds: { CENTER: "dt-center", HOME: "dt-home", SCHOOL: "dt-center", DAYCARE: "dt-center" },
     driveTimeSessionTypeId: null,
     driveMinutes: {},
     distanceMeters: {},

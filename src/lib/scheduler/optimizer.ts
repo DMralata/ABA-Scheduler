@@ -128,7 +128,7 @@ function commitAssignment(
   clientId: string,
   slot: CandidateSlot,
   sessionHours: number,
-  locationType: "HOME" | "CENTER" | "SCHOOL",
+  locationType: "HOME" | "CENTER" | "SCHOOL" | "DAYCARE",
   workingState: WorkingState
 ): void {
   const booked: BookedSlot = {
@@ -314,9 +314,15 @@ export function optimize(
     // HYBRID: try CENTER first, fall back to HOME if no eligible providers found.
     // SCHOOL behaves like CENTER for matching (open pool, no approved-list, no provider→client drive)
     // but the resolved locationType is recorded as SCHOOL on the proposal.
+    // DAYCARE behaves like HOME for matching (drive time enforced, flex session floor)
+    // but is recorded as DAYCARE; the provider drives to the client's daycare address.
     // resolvedLocationType tracks which mode succeeded for proposal creation below.
-    let resolvedLocationType: "HOME" | "CENTER" | "SCHOOL" =
-      client.preferredLocation === "SCHOOL" ? "SCHOOL" : "CENTER";
+    let resolvedLocationType: "HOME" | "CENTER" | "SCHOOL" | "DAYCARE" =
+      client.preferredLocation === "SCHOOL" ? "SCHOOL" :
+      client.preferredLocation === "DAYCARE" ? "DAYCARE" :
+      client.preferredLocation === "HOME" ? "HOME" : "CENTER";
+    // DAYCARE keeps its preferredLocation so matcher.ts treats it as non-shared
+    // (drive time computed against the client's address, no shared-CENTER skip).
     let clientForMatch =
       client.preferredLocation === "HYBRID" || client.preferredLocation === "SCHOOL"
         ? { ...client, preferredLocation: "CENTER" as const }
@@ -357,7 +363,9 @@ export function optimize(
           ? "HOME"
           : client.preferredLocation === "SCHOOL"
             ? "SCHOOL"
-            : "CENTER";
+            : client.preferredLocation === "DAYCARE"
+              ? "DAYCARE"
+              : "CENTER";
     }
 
     if (ranked.length === 0) {

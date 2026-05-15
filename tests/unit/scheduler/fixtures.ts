@@ -128,7 +128,7 @@ export function makeInput(
     centerId: null,
     clients,
     providers,
-    sessionTypeIds: { CENTER: "session-type-dt", HOME: "session-type-dt-home", SCHOOL: "session-type-dt" },
+    sessionTypeIds: { CENTER: "session-type-dt", HOME: "session-type-dt-home", SCHOOL: "session-type-dt", DAYCARE: "session-type-dt" },
     driveTimeSessionTypeId: null,
     driveMinutes, distanceMeters: {},
   };

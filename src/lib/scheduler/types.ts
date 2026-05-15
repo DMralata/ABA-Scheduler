@@ -81,7 +81,7 @@ export interface SchedulerInput {
   schoolOriginId?: string | null;
   clients: SchedulerClient[];
   providers: SchedulerProvider[];
-  sessionTypeIds: { CENTER: string; HOME: string; SCHOOL: string }; // Direct Therapy (center), Direct Therapy Home, and school-location direct therapy
+  sessionTypeIds: { CENTER: string; HOME: string; SCHOOL: string; DAYCARE: string }; // Direct Therapy used for CENTER/SCHOOL/DAYCARE locations; Direct Therapy Home for HOME
   driveTimeSessionTypeId: string | null; // "Drive Time" session type — used to create gap sessions
   // Drive time matrix: driveMinutes[providerId][clientId] = minutes (provider→client)
   //                    driveMinutes[clientId][clientId]   = minutes (client→client, consecutive sessions)
@@ -124,7 +124,7 @@ export interface ProposedSessionOutput {
   providerId: string;
   authorizationId: string | null;
   sessionTypeId: string;
-  locationType: "HOME" | "CENTER" | "SCHOOL";
+  locationType: "HOME" | "CENTER" | "SCHOOL" | "DAYCARE";
   // Day + local times (resolved to UTC datetimes by the caller)
   dayOfWeek: DayOfWeek;
   startTime: string; // "HH:MM" 24h local
