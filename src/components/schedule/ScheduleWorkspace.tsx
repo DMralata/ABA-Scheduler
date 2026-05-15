@@ -90,7 +90,26 @@ function formatWeekLabel(weekDates: Date[], tz: string): string {
 export function ScheduleWorkspace({ clients, providers, sessionTypes, centers, centerId, timezone }: ScheduleWorkspaceProps) {
   // Initialize to noon UTC of today in the center's timezone so the displayed
   // date, timeline fetch, and auto-complete all agree regardless of browser TZ.
-  const [currentDate, setCurrentDate] = useState(() => centerNoon(timezone));
+  // Rehydrate from sessionStorage so navigating away from /schedule and back
+  // (e.g., to /clients then back) lands on the day the user was last viewing
+  // instead of snapping to today. sessionStorage is intentional: a brand-new
+  // browser session starts on today.
+  const [currentDate, setCurrentDate] = useState(() => {
+    if (typeof window === "undefined") return centerNoon(timezone);
+    try {
+      const saved = sessionStorage.getItem("schedule_current_date");
+      if (saved && /^\d{4}-\d{2}-\d{2}$/.test(saved)) {
+        return new Date(`${saved}T12:00:00Z`);
+      }
+    } catch { /* sessionStorage may be unavailable (incognito strictness) */ }
+    return centerNoon(timezone);
+  });
+  useEffect(() => {
+    try {
+      const dateStr = new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(currentDate);
+      sessionStorage.setItem("schedule_current_date", dateStr);
+    } catch { /* ignore */ }
+  }, [currentDate, timezone]);
   const [draft, setDraft] = useState<SessionDraft | null>(null);
   const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
   const [driveTimeTarget, setDriveTimeTarget] = useState<DriveTimeSummaryTarget | null>(null);
@@ -150,7 +169,16 @@ export function ScheduleWorkspace({ clients, providers, sessionTypes, centers, c
   const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
   const [analysisSnapshotKey, setAnalysisSnapshotKey] = useState<number | null>(null);
   const [activeSessionTypeId, setActiveSessionTypeId] = useState<string>("");
-  const [viewMode, setViewMode] = useState<"day" | "week">("day");
+  const [viewMode, setViewMode] = useState<"day" | "week">(() => {
+    if (typeof window === "undefined") return "day";
+    try {
+      const saved = sessionStorage.getItem("schedule_view_mode");
+      return saved === "week" ? "week" : "day";
+    } catch { return "day"; }
+  });
+  useEffect(() => {
+    try { sessionStorage.setItem("schedule_view_mode", viewMode); } catch { /* ignore */ }
+  }, [viewMode]);
   const [autoDropdownOpen, setAutoDropdownOpen] = useState(false);
   const autoDropdownRef = useRef<HTMLDivElement>(null);
   const [undoDays, setUndoDays] = useState<Array<{ dayStart: Date; dayEnd: Date }>>([]);
