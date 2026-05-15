@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, ChevronLeft, ChevronRight, Trash2, ChevronDown, BarChart2, Undo2, X, GripVertical } from "lucide-react";
+import { Sparkles, ChevronLeft, ChevronRight, Trash2, ChevronDown, BarChart2, Undo2, X, GripVertical, Check } from "lucide-react";
 import { WeekAnalysisModal } from "./WeekAnalysisModal";
 import type { AuditData } from "./WeekAnalysisModal";
-import { clearDaySchedule, clearDayUnbillable, clearDayProposals, clearWeekProposals } from "@/lib/actions/scheduler";
+import { clearDaySchedule, clearDayUnbillable, clearDayProposals, clearWeekProposals, approveAllProposalsInRange } from "@/lib/actions/scheduler";
 import { ResourceTimeline } from "./ResourceTimeline";
 import { SessionTypePalette } from "./SessionTypePalette";
 import { SessionModal } from "./SessionModal";
@@ -104,6 +104,7 @@ export function ScheduleWorkspace({ clients, providers, sessionTypes, centers, c
   const [clearDayState, setClearDayState] = useState<"idle" | "confirming" | "clearing">("idle");
   const [clearMode, setClearMode] = useState<"all" | "unbillable" | "proposals">("all");
   const [clearWeekState, setClearWeekState] = useState<"idle" | "confirming" | "clearing">("idle");
+  const [acceptAllRunning, setAcceptAllRunning] = useState(false);
 
   const makeupStorageKey = `makeup_notifications_${centerId ?? "default"}`;
   const [makeupSessionIds, setMakeupSessionIds] = useState<string[]>(() => {
@@ -374,6 +375,39 @@ export function ScheduleWorkspace({ clients, providers, sessionTypes, centers, c
       })
       .catch(() => setAutoMessage("Could not clear week."))
       .finally(() => setClearWeekState("idle"));
+  }
+
+  // Accept every PENDING proposal currently visible in the day or week view.
+  // The server action batches them in one round-trip and serializes the
+  // per-proposal transactions so each ATI re-check sees committed state.
+  async function handleAcceptAll() {
+    if (!centerId) { setAutoMessage("No center configured."); return; }
+    setAcceptAllRunning(true);
+    setAutoMessage(null); setAutoSkips([]); setAutoUnserved([]); setAutoWarnings([]); setAutoDialogOpen(false);
+    const start = viewMode === "week"
+      ? computeDayBoundaries(weekDates[0], timezone).dayStart
+      : computeDayBoundaries(currentDate, timezone).dayStart;
+    const end = viewMode === "week"
+      ? computeDayBoundaries(weekDates[4], timezone).dayEnd
+      : computeDayBoundaries(currentDate, timezone).dayEnd;
+    try {
+      const result = await approveAllProposalsInRange(start, end, centerId);
+      const okCount = result.approved.length;
+      const failCount = result.failed.length;
+      if (okCount === 0 && failCount === 0) {
+        setAutoMessage("No proposals to accept");
+      } else {
+        const parts: string[] = [];
+        parts.push(`${okCount} proposal${okCount !== 1 ? "s" : ""} accepted`);
+        if (failCount > 0) parts.push(`${failCount} failed`);
+        setAutoMessage(parts.join(" · "));
+      }
+      setRefreshKey(k => k + 1);
+    } catch {
+      setAutoMessage("Could not accept proposals.");
+    } finally {
+      setAcceptAllRunning(false);
+    }
   }
 
   async function handleAutoCompleteWeek() {
@@ -820,6 +854,17 @@ export function ScheduleWorkspace({ clients, providers, sessionTypes, centers, c
           >
             <BarChart2 size={12} />
             {analysisLoading ? "Analyzing…" : "Analyze week"}
+          </button>
+
+          {/* Accept all proposals — converts every PENDING proposal in the
+              current day/week view into a real Session. */}
+          <button
+            onClick={handleAcceptAll}
+            disabled={acceptAllRunning || autoRunning || clearDayState === "clearing" || clearWeekState === "clearing" || !centerId}
+            style={{ ...dockBtn, opacity: (acceptAllRunning || autoRunning || !centerId) ? 0.5 : 1 }}
+          >
+            <Check size={12} />
+            {acceptAllRunning ? "Accepting…" : viewMode === "week" ? "Accept all week" : "Accept all"}
           </button>
 
           {/* Vertical divider */}

@@ -280,6 +280,42 @@ export async function approveAllProposedSessions(
   return { approved, failed };
 }
 
+// Convenience wrapper for the schedule dock's "Accept all" button. Finds every
+// PENDING proposal in the given date range whose provider belongs to the center
+// (mirrors the filter used by clearDayProposals/clearWeekProposals) and runs
+// them through approveAllProposedSessions.
+export async function approveAllProposalsInRange(
+  startDate: Date,
+  endDate: Date,
+  centerId: string
+): Promise<{
+  approved: { proposalId: string; sessionId: string }[];
+  failed: { proposalId: string; error: string }[];
+}> {
+  const auth = await requireUser();
+  if (!auth.ok) return { approved: [], failed: [] };
+
+  const centerProviders = await prisma.provider.findMany({
+    where: { OR: [{ centerId }, { centerId: null }] },
+    select: { id: true },
+  });
+  const centerProviderIds = centerProviders.map((p) => p.id);
+
+  const pending = await prisma.proposedSession.findMany({
+    where: {
+      status: "PENDING",
+      providerId: { in: centerProviderIds },
+      startTime: { gte: startDate, lt: endDate },
+    },
+    select: { id: true },
+    orderBy: { startTime: "asc" },
+  });
+
+  if (pending.length === 0) return { approved: [], failed: [] };
+
+  return approveAllProposedSessions(pending.map((p) => p.id));
+}
+
 export async function rejectProposedSession(
   proposalId: string,
   rejectionReason?: string
