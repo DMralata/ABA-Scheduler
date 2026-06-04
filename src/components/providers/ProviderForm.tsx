@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Provider } from "@prisma/client";
 import { createProvider, updateProvider } from "@/lib/actions/providers";
@@ -22,7 +22,7 @@ interface ProviderFormProps {
 
 export function ProviderForm({ provider }: ProviderFormProps) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [position, setPosition] = useState(provider?.position ?? "RBT");
@@ -54,18 +54,25 @@ export function ProviderForm({ provider }: ProviderFormProps) {
       zoomUserId: (fd.get("zoomUserId") as string) || undefined,
     };
 
-    startTransition(async () => {
-      const result = provider
-        ? await updateProvider(provider.id, data)
-        : await createProvider(data);
+    setIsPending(true);
+    const action = provider
+      ? updateProvider(provider.id, data)
+      : createProvider(data);
 
-      if (!result.success) {
-        setError(result.error);
-        return;
-      }
-      router.push(`/providers/${result.data.id}`);
-      router.refresh();
-    });
+    action
+      .then((result) => {
+        if (!result.success) {
+          setError(result.error);
+          setIsPending(false);
+          return;
+        }
+        router.push(`/providers/${result.data.id}`);
+        router.refresh();
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+        setIsPending(false);
+      });
   }
 
   return (

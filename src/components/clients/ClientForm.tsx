@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Client, ClientAvailability } from "@prisma/client";
 import { createClient, updateClient } from "@/lib/actions/clients";
@@ -30,7 +30,7 @@ function toDateInput(date: Date | null | undefined): string {
 
 export function ClientForm({ client, availability }: ClientFormProps) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -64,18 +64,25 @@ export function ClientForm({ client, availability }: ClientFormProps) {
       })(),
     };
 
-    startTransition(async () => {
-      const result = client
-        ? await updateClient(client.id, data as unknown as UpdateClientInput)
-        : await createClient(data as unknown as ClientInput);
+    setIsPending(true);
+    const action = client
+      ? updateClient(client.id, data as unknown as UpdateClientInput)
+      : createClient(data as unknown as ClientInput);
 
-      if (!result.success) {
-        setError(result.error);
-        return;
-      }
-      router.push(`/clients/${result.data.id}`);
-      router.refresh();
-    });
+    action
+      .then((result) => {
+        if (!result.success) {
+          setError(result.error);
+          setIsPending(false);
+          return;
+        }
+        router.push(`/clients/${result.data.id}`);
+        router.refresh();
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+        setIsPending(false);
+      });
   }
 
   return (

@@ -53,9 +53,14 @@ function getComponent(
 
 let scriptLoading = false;
 let scriptLoaded = false;
+let scriptFailed = false;
 const onLoadCallbacks: Array<() => void> = [];
 
 function loadGoogleMapsScript(onLoad: () => void) {
+  // No-op if Maps is disabled or the key is missing — keep address fields editable as plain inputs.
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  if (!apiKey || scriptFailed) return;
+
   if (scriptLoaded) {
     onLoad();
     return;
@@ -65,12 +70,17 @@ function loadGoogleMapsScript(onLoad: () => void) {
 
   scriptLoading = true;
   const script = document.createElement("script");
-  script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`;
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
   script.async = true;
   script.onload = () => {
     scriptLoaded = true;
     scriptLoading = false;
     onLoadCallbacks.forEach((cb) => cb());
+    onLoadCallbacks.length = 0;
+  };
+  script.onerror = () => {
+    scriptFailed = true;
+    scriptLoading = false;
     onLoadCallbacks.length = 0;
   };
   document.head.appendChild(script);
