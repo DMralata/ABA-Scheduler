@@ -113,7 +113,7 @@ async function buildWeekInput(
   weekEnd: Date,
   weekOf: Date,
   mondayDate: string,
-  sessionTypeIds: { CENTER: string; HOME: string; SCHOOL: string },
+  sessionTypeIds: { CENTER: string; HOME: string; SCHOOL: string; DAYCARE: string },
   driveTimeSessionTypeId: string | null,
   overrideBookedSessions?: Array<{ providerId: string | null; clientId: string | null; startTime: Date; endTime: Date; status: string; cancelledBy: string | null; sessionTypeId?: string; locationType?: string | null }>
 ): Promise<SchedulerInput> {
@@ -403,7 +403,7 @@ async function main() {
     prisma.sessionType.findFirst({ where: { name: "Drive Time" } }),
   ]);
   if (!centerST) { console.error("No billable session type found. Exiting."); process.exit(1); }
-  const sessionTypeIds = { CENTER: centerST.id, HOME: homeST?.id ?? centerST.id, SCHOOL: centerST.id };
+  const sessionTypeIds = { CENTER: centerST.id, HOME: homeST?.id ?? centerST.id, SCHOOL: centerST.id, DAYCARE: centerST.id };
   const driveTimeSessionTypeId = driveTimeST?.id ?? null;
 
   // Load roster IDs (needed for snapshots and cleanup)

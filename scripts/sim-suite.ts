@@ -136,7 +136,7 @@ interface DBContext {
   weekEnd: Date;         // Exclusive next Monday midnight UTC
   clients: SchedulerClient[];
   providers: SchedulerProvider[];
-  sessionTypeIds: { CENTER: string; HOME: string; SCHOOL: string };
+  sessionTypeIds: { CENTER: string; HOME: string; SCHOOL: string; DAYCARE: string };
   driveTimeSessionTypeId: string | null;
   driveMinutes: Record<string, Record<string, number>>;
   distanceMeters: Record<string, Record<string, number>>;
@@ -163,7 +163,7 @@ async function loadDBContext(targetDate: Date): Promise<DBContext> {
   if (!center) throw new Error("No center found");
   if (!centerST) throw new Error("No billable session type found");
 
-  const sessionTypeIds = { CENTER: centerST.id, HOME: homeST?.id ?? centerST.id, SCHOOL: centerST.id };
+  const sessionTypeIds = { CENTER: centerST.id, HOME: homeST?.id ?? centerST.id, SCHOOL: centerST.id, DAYCARE: centerST.id };
   const driveTimeSessionTypeId = driveTimeST?.id ?? null;
 
   const [rawClients, rawProviders, allAuths] = await Promise.all([

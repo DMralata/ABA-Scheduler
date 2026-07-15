@@ -318,7 +318,7 @@ async function main() {
       centerId: center.id,
       clients: schedulerClients,
       providers: schedulerProviders,
-      sessionTypeIds: { CENTER: defaultST.id, HOME: homeSTId, SCHOOL: defaultST.id },
+      sessionTypeIds: { CENTER: defaultST.id, HOME: homeSTId, SCHOOL: defaultST.id, DAYCARE: defaultST.id },
       driveTimeSessionTypeId: driveTimeST?.id ?? null,
       driveMinutes: {},
       distanceMeters: {},

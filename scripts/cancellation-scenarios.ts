@@ -142,7 +142,7 @@ interface DBContext {
     weeklyHoursAlreadyScheduled: number;
     bookedWindows: Array<{ dayOfWeek: DayOfWeek; startTime: string; endTime: string; clientId?: string }>;
   }>;
-  sessionTypeIds: { CENTER: string; HOME: string; SCHOOL: string };
+  sessionTypeIds: { CENTER: string; HOME: string; SCHOOL: string; DAYCARE: string };
   driveTimeSessionTypeId: string | null;
   weekOf: Date;
   weekStart: Date;
@@ -165,7 +165,7 @@ async function loadDBContext(targetDate: Date): Promise<DBContext> {
   ]);
 
   if (!centerST) throw new Error("No billable session type found");
-  const sessionTypeIds = { CENTER: centerST.id, HOME: homeST?.id ?? centerST.id, SCHOOL: centerST.id };
+  const sessionTypeIds = { CENTER: centerST.id, HOME: homeST?.id ?? centerST.id, SCHOOL: centerST.id, DAYCARE: centerST.id };
   const driveTimeSessionTypeId = driveTimeST?.id ?? null;
   const defaultSessHours = center?.defaultSessionHours ?? 4.0;
 

@@ -75,7 +75,7 @@ interface DBContext {
   weekDayDates: Record<DayOfWeek, string>; // Mon–Fri → "YYYY-MM-DD"
   clients: SchedulerClient[];
   providers: SchedulerProvider[];
-  sessionTypeIds: { CENTER: string; HOME: string; SCHOOL: string };
+  sessionTypeIds: { CENTER: string; HOME: string; SCHOOL: string; DAYCARE: string };
   driveTimeSessionTypeId: string | null;
   clientNameMap: Record<string, string>;
   providerNameMap: Record<string, string>;
@@ -105,7 +105,7 @@ async function loadContext(): Promise<DBContext> {
     prisma.center.findUnique({ where: { id: CENTER_ID } }),
   ]);
   if (!centerST) throw new Error("No billable session type found");
-  const sessionTypeIds = { CENTER: centerST.id, HOME: homeST?.id ?? centerST.id, SCHOOL: centerST.id };
+  const sessionTypeIds = { CENTER: centerST.id, HOME: homeST?.id ?? centerST.id, SCHOOL: centerST.id, DAYCARE: centerST.id };
   const driveTimeSessionTypeId = driveTimeST?.id ?? null;
   const defaultSessHours = center?.defaultSessionHours ?? 4.0;
 

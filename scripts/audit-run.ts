@@ -279,7 +279,7 @@ async function main() {
       centerId: null,
       clients: schedulerClients,
       providers: schedulerProviders,
-      sessionTypeIds: { CENTER: sessionType.id, HOME: sessionType.id, SCHOOL: sessionType.id },
+      sessionTypeIds: { CENTER: sessionType.id, HOME: sessionType.id, SCHOOL: sessionType.id, DAYCARE: sessionType.id },
       driveTimeSessionTypeId: null,
       driveMinutes: {}, distanceMeters: {}, // No Maps API in script — all drive times = 0
       weekMode: true,

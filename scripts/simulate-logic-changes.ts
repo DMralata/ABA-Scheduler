@@ -628,7 +628,7 @@ async function main() {
   const baselineInput: SchedulerInput = {
     weekOf, targetDate: mondayDate, timezone: tz, centerId: null,
     clients: baselineClients, providers: baselineProviders,
-    sessionTypeIds: { CENTER: sessionType.id, HOME: sessionType.id, SCHOOL: sessionType.id },
+    sessionTypeIds: { CENTER: sessionType.id, HOME: sessionType.id, SCHOOL: sessionType.id, DAYCARE: sessionType.id },
     driveTimeSessionTypeId: null, driveMinutes: {}, distanceMeters: {},
     weekMode: true,
   };

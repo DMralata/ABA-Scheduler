@@ -95,7 +95,7 @@ type Proposal = {
   providerId: string|null;
   authorizationId: string|null;
   sessionTypeId: string;
-  locationType: "HOME"|"CENTER"|"SCHOOL"|null;
+  locationType: "HOME"|"CENTER"|"SCHOOL"|"DAYCARE"|null;
   startTime: Date;
   endTime: Date;
   status: string;
@@ -295,6 +295,7 @@ async function main() {
     CENTER: centerSessType?.id ?? "",
     HOME:   homeSessType?.id ?? centerSessType?.id ?? "",
     SCHOOL: centerSessType?.id ?? "",
+    DAYCARE: centerSessType?.id ?? "",
   };
 
   // Load all proposals for 4/6–4/10
