@@ -44,6 +44,14 @@ const FILE = arg("file");
 const SHEET = arg("sheet") ?? "7-13";
 const WEEK = arg("week"); // Monday, YYYY-MM-DD
 const DRY = process.argv.includes("--dry-run");
+// --sync-roster: after importing, deactivate every ACTIVE client and provider
+// who does NOT appear on the roster sheets, so the app matches the workbook.
+// --roster-sheets "7-13,7-6,6-29" widens the keep-list to the union of several
+// weekly tabs (default: just the imported sheet). Deactivation mirrors the
+// app's own actions (terminationDate / status INACTIVE, future sessions
+// cancelled, approvals ended, proposals rejected). Nothing is hard-deleted.
+const SYNC_ROSTER = process.argv.includes("--sync-roster") || !!arg("roster-sheets");
+const ROSTER_SHEETS = (arg("roster-sheets") ?? SHEET).split(",").map((x) => x.trim()).filter(Boolean);
 
 if (!FILE || !WEEK || !/^\d{4}-\d{2}-\d{2}$/.test(WEEK)) {
   console.error('Usage: npx tsx scripts/import-opening-schedule.ts --file <xlsx> --week YYYY-MM-DD [--sheet "7-13"] [--dry-run]');
@@ -106,9 +114,19 @@ function parseCell(raw: unknown): { first: string; lastInitial: string | null } 
   const initial = parts[1]?.replace(/[^A-Za-z]/g, "") || null;
   if (!first) return null;
   return {
-    first: first[0].toUpperCase() + first.slice(1),
+    first: canonical(first[0].toUpperCase() + first.slice(1)),
     lastInitial: initial ? initial[0].toUpperCase() : null,
   };
+}
+
+// Confirmed sheet typos - both spellings are the same person. Applied to every
+// parsed first name so import matching, creation, and roster sync all merge them.
+const NAME_ALIASES: Record<string, string> = {
+  brianta: "Briana", // "Brianta (PT)" on the 7-13 Wednesday header
+  nevaeh: "Neveah",  // "Neveah" is the dominant spelling in the workbook (130 vs 20)
+};
+function canonical(first: string): string {
+  return NAME_ALIASES[first.trim().toLowerCase()] ?? first;
 }
 
 const norm = (s: string) => s.trim().toLowerCase();
@@ -139,6 +157,65 @@ function warnSimilarNames(kind: string, names: string[]) {
   }
 }
 
+// Reads a sheet into a row grid. blankrows:false guards against tabs with a
+// stretched used-range (the "7-6" tab reports 1M rows).
+function readGrid(wb: XLSX.WorkBook, name: string): unknown[][] | null {
+  const ws = wb.Sheets[name];
+  if (!ws) return null;
+  return XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "", blankrows: false });
+}
+
+type NameRef = { first: string; lastInitial: string | null };
+
+// Collects every provider (day-header columns) and client (billable cells)
+// appearing anywhere on a weekly grid tab.
+function collectPeople(grid: unknown[][]): { providers: NameRef[]; clients: NameRef[] } {
+  const providers = new Map<string, NameRef>();
+  const clients = new Map<string, NameRef>();
+  let r = 0;
+  while (r < grid.length) {
+    const a = String(grid[r]?.[0] ?? "").trim().toLowerCase();
+    if (!DAY_ALIASES[a]) { r++; continue; }
+    const headerRow = grid[r + 1] ?? [];
+    const cols: number[] = [];
+    for (let c = 1; c < headerRow.length; c++) {
+      const h = String(headerRow[c] ?? "").trim();
+      if (!h) continue;
+      const tokens = h.replace(/\(.*?\)/g, " ").split(/\s+/).filter(Boolean);
+      const first = tokens[0]?.replace(/[^A-Za-z'-]/g, "");
+      if (!first) continue;
+      const second = tokens[1]?.replace(/[^A-Za-z.]/g, "") ?? "";
+      const lastInitial = /^[A-Za-z]\.?$/.test(second) ? second[0].toUpperCase() : null;
+      const ref = { first: canonical(first[0].toUpperCase() + first.slice(1)), lastInitial };
+      providers.set(`${norm(ref.first)}|${ref.lastInitial ?? ""}`, ref);
+      cols.push(c);
+    }
+    let rr = r + 2;
+    for (; rr < grid.length; rr++) {
+      const slot = String(grid[rr]?.[0] ?? "").trim();
+      if (!/^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/.test(slot)) break;
+      for (const c of cols) {
+        const parsed = parseCell(grid[rr]?.[c]);
+        if (parsed) clients.set(`${norm(parsed.first)}|${parsed.lastInitial ?? ""}`, parsed);
+      }
+    }
+    r = rr;
+  }
+  return { providers: [...providers.values()], clients: [...clients.values()] };
+}
+
+// True when a DB person matches any sheet name: same first name, and if the
+// sheet gave a last initial, the DB last name must start with it. A sheet name
+// with no initial keeps every DB person with that first name (first names are
+// how the sheet identifies people, so this errs on the side of keeping).
+function onRoster(dbFirst: string, dbLast: string, keep: NameRef[]): boolean {
+  return keep.some(
+    (k) =>
+      norm(k.first) === norm(dbFirst) &&
+      (!k.lastInitial || dbLast.toUpperCase().startsWith(k.lastInitial))
+  );
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 interface Block {
@@ -153,9 +230,8 @@ interface Block {
 
 async function main() {
   const wb = XLSX.read(require("fs").readFileSync(path.resolve(FILE!)), { type: "buffer" });
-  const ws = wb.Sheets[SHEET];
-  if (!ws) { console.error(`Sheet "${SHEET}" not found. Available: ${wb.SheetNames.join(", ")}`); process.exit(1); }
-  const grid: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" });
+  const grid = readGrid(wb, SHEET);
+  if (!grid) { console.error(`Sheet "${SHEET}" not found. Available: ${wb.SheetNames.join(", ")}`); process.exit(1); }
 
   // Parse day blocks → merge contiguous slots into Blocks
   const blocks: Block[] = [];
@@ -178,7 +254,7 @@ async function main() {
       const second = tokens[1]?.replace(/[^A-Za-z.]/g, "") ?? "";
       // Single letter (optionally with dot) = last-name initial; longer words are role/hours noise.
       const lastInitial = /^[A-Za-z]\.?$/.test(second) ? second[0].toUpperCase() : null;
-      providerCols.push({ col: c, first, lastInitial });
+      providerCols.push({ col: c, first: canonical(first), lastInitial });
     }
 
     // open[col] = current in-progress block per column
@@ -392,12 +468,102 @@ async function main() {
     }
   }
 
+  // ── Roster sync ─────────────────────────────────────────────────────────────
+  // Keep-list = union of everyone appearing on the roster sheets. Any ACTIVE
+  // client or provider in the DB who matches none of those names is deactivated.
+  let deactivatedNames: string[] = [];
+  let deactivatedProviderNames: string[] = [];
+  if (SYNC_ROSTER) {
+    const keepClients: NameRef[] = [];
+    const keepProviders: NameRef[] = [];
+    for (const sheetName of ROSTER_SHEETS) {
+      const g = sheetName === SHEET ? grid : readGrid(wb, sheetName);
+      if (!g) { console.error(`Roster sheet "${sheetName}" not found — aborting sync so nobody is wrongly removed.`); process.exit(1); }
+      const people = collectPeople(g);
+      keepClients.push(...people.clients);
+      keepProviders.push(...people.providers);
+    }
+    console.log(`\nRoster sync against sheets [${ROSTER_SHEETS.join(", ")}]: ${keepClients.length} client names, ${keepProviders.length} provider names on the keep-list.`);
+
+    const now = new Date();
+
+    // Clients not on any roster sheet → deactivate (mirrors deactivateClient)
+    const activeClients = await prisma.client.findMany({
+      where: { OR: [{ terminationDate: null }, { terminationDate: { gt: now } }] },
+      select: { id: true, firstName: true, lastName: true },
+    });
+    const clientsToDrop = activeClients.filter(
+      (c: { firstName: string; lastName: string }) => !onRoster(c.firstName, c.lastName, keepClients)
+    );
+    deactivatedNames = clientsToDrop.map(
+      (c: { firstName: string; lastName: string }) => `${c.lastName}, ${c.firstName}`
+    );
+    if (!DRY) {
+      for (const c of clientsToDrop) {
+        await prisma.$transaction([
+          prisma.client.update({ where: { id: c.id }, data: { terminationDate: now } }),
+          prisma.session.updateMany({
+            where: { clientId: c.id, status: { in: ["SCHEDULED", "IN_PROGRESS"] }, startTime: { gte: now } },
+            data: { status: "CANCELLED", cancelledBy: "CLIENT", cancellationReason: "CLIENT_DEACTIVATED" },
+          }),
+          prisma.approvedHome.updateMany({
+            where: { clientId: c.id, endDate: null },
+            data: { endDate: now },
+          }),
+          prisma.proposedSession.updateMany({
+            where: { clientId: c.id, status: "PENDING" },
+            data: { status: "REJECTED", rejectionReason: "Client deactivated (roster sync)", rejectedAt: now },
+          }),
+        ]);
+      }
+    }
+
+    // Providers not on any roster sheet → set INACTIVE (mirrors deactivateProvider)
+    const activeProviders = await prisma.provider.findMany({
+      where: { status: "ACTIVE" },
+      select: { id: true, firstName: true, lastName: true },
+    });
+    const providersToDrop = activeProviders.filter(
+      (p: { firstName: string; lastName: string }) => !onRoster(p.firstName, p.lastName, keepProviders)
+    );
+    deactivatedProviderNames = providersToDrop.map(
+      (p: { firstName: string; lastName: string }) => `${p.lastName}, ${p.firstName}`
+    );
+    if (!DRY) {
+      for (const pv of providersToDrop) {
+        await prisma.$transaction([
+          prisma.provider.update({ where: { id: pv.id }, data: { status: "INACTIVE" } }),
+          prisma.session.updateMany({
+            where: { providerId: pv.id, status: { in: ["SCHEDULED", "IN_PROGRESS"] }, startTime: { gte: now } },
+            data: { status: "CANCELLED", cancelledBy: "PROVIDER", cancellationReason: "PROVIDER_DEACTIVATED" },
+          }),
+          prisma.approvedHome.updateMany({
+            where: { providerId: pv.id, endDate: null },
+            data: { endDate: now },
+          }),
+          prisma.providerAvailability.deleteMany({ where: { providerId: pv.id } }),
+          prisma.providerBlock.deleteMany({ where: { providerId: pv.id, date: { gte: now } } }),
+          prisma.proposedSession.updateMany({
+            where: { providerId: pv.id, status: "PENDING" },
+            data: { status: "REJECTED", rejectionReason: "Provider deactivated (roster sync)", rejectedAt: now },
+          }),
+        ]);
+      }
+    }
+  }
+
   // ── Report ─────────────────────────────────────────────────────────────────
   console.log(`\n${DRY ? "[DRY RUN] Would create" : "Created"}:`);
   console.log(`  Sessions:  ${created}${skippedOverlap ? ` (${skippedOverlap} skipped — provider already booked)` : ""}`);
   console.log(`  Providers: ${createdProviders.length} new — ${createdProviders.join(", ") || "none"}`);
   console.log(`  Clients:   ${createdClients.length} new — ${createdClients.join(", ") || "none"}`);
   console.log(`  Availability windows set for ${availByClient.size} clients.`);
+  if (SYNC_ROSTER) {
+    console.log(`  ${DRY ? "Would deactivate" : "Deactivated"} ${deactivatedNames.length} client${deactivatedNames.length === 1 ? "" : "s"} not on [${ROSTER_SHEETS.join(", ")}]${deactivatedNames.length ? ":" : "."}`);
+    for (const n of deactivatedNames) console.log(`    - ${n}`);
+    console.log(`  ${DRY ? "Would deactivate" : "Deactivated"} ${deactivatedProviderNames.length} provider${deactivatedProviderNames.length === 1 ? "" : "s"} not on [${ROSTER_SHEETS.join(", ")}]${deactivatedProviderNames.length ? ":" : "."}`);
+    for (const n of deactivatedProviderNames) console.log(`    - ${n}`);
+  }
   if (createdClients.length > 0) {
     console.log(`\n⚠ New clients have PLACEHOLDER DOB (2018-01-01), insurance ("TBD (imported)"),`);
     console.log(`  and NO authorizations. Update them in the app before relying on validation.`);
