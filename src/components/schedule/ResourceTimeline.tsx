@@ -689,7 +689,13 @@ export function ResourceTimeline({ entities, currentDate, timezone, centerId, ac
           import("@/lib/actions/sessions").then(({ rescheduleSession }) => {
             rescheduleSession(sessionId, { startTime: newStart, endTime: newEnd })
               .then(result => {
-                if (!result.success) setMoveError(result.error ?? "Failed to resize session.");
+                if (!result.success) {
+                  // Show the specific validation reasons, not the generic message
+                  const detail = "failures" in result && result.failures?.length
+                    ? result.failures.map((f) => f.reason).join(" ")
+                    : result.error;
+                  setMoveError(detail ?? "Failed to resize session.");
+                }
                 else onProposalApproved?.();
               })
               .catch(() => setMoveError("Failed to resize session."));
@@ -720,7 +726,13 @@ export function ResourceTimeline({ entities, currentDate, timezone, centerId, ac
           import("@/lib/actions/sessions").then(({ rescheduleSession }) => {
             rescheduleSession(sessionId, { startTime: newStart, endTime: newEnd })
               .then(result => {
-                if (!result.success) setMoveError(result.error ?? "Failed to move session.");
+                if (!result.success) {
+                  // Show the specific validation reasons, not the generic message
+                  const detail = "failures" in result && result.failures?.length
+                    ? result.failures.map((f) => f.reason).join(" ")
+                    : result.error;
+                  setMoveError(detail ?? "Failed to move session.");
+                }
                 else onProposalApproved?.();
               })
               .catch(() => setMoveError("Failed to move session."));

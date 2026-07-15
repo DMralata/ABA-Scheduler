@@ -24,7 +24,12 @@ export interface SessionDraft {
 }
 
 interface SessionType { id: string; name: string; billable: boolean; requiresBcba: boolean }
-interface Client { id: string; firstName: string; lastName: string; street: string | null; city: string | null; state: string | null; zip: string | null }
+interface Client {
+  id: string; firstName: string; lastName: string;
+  street: string | null; city: string | null; state: string | null; zip: string | null;
+  availability: { dayOfWeek: string; startTime: string; endTime: string }[];
+  authorizations: { startDate: Date; endDate: Date }[];
+}
 interface Provider { id: string; firstName: string; lastName: string; position: string }
 interface Center { id: string; name: string }
 
@@ -73,6 +78,20 @@ function fromLocalDatetimeInput(value: string, timezone: string): Date {
   return new Date(
     Date.UTC(year, month - 1, day, 12 - (localHour === 24 ? 0 : localHour) + hours, minutes - localMinute)
   );
+}
+
+// True when any authorization's [startDate, endDate] range covers the selected
+// local calendar date. Auth dates are date-only values stored as UTC midnight,
+// so compare on UTC date strings (mirrors validateAuthorization on the server).
+function hasAuthCovering(client: Client, startStr: string): boolean {
+  if (client.authorizations.length === 0) return false;
+  const day = (startStr || "").split("T")[0];
+  if (!day) return client.authorizations.length > 0;
+  return client.authorizations.some((a) => {
+    const s = new Date(a.startDate).toISOString().split("T")[0];
+    const e = new Date(a.endDate).toISOString().split("T")[0];
+    return day >= s && day <= e;
+  });
 }
 
 function buildAutoName(type: SessionType | undefined, client: Client | undefined): string {
@@ -385,6 +404,17 @@ export function SessionModal({
                 ))}
               </SelectContent>
             </Select>
+            {/* Readiness warnings — surface blockers before the form is filled out */}
+            {selectedClient && selectedClient.availability.length === 0 && (
+              <p className="text-[11px] text-amber-600 px-0.5">
+                ⚠ No availability on file — booking will fail. Add availability windows on the client&apos;s page first.
+              </p>
+            )}
+            {selectedClient && !hasAuthCovering(selectedClient, startStr) && (
+              <p className="text-[11px] text-amber-600 px-0.5">
+                ⚠ No authorization covers this date — Direct Therapy sessions will be blocked.
+              </p>
+            )}
           </div>
 
           {/* Session Name — auto-populated from type + client, editable */}

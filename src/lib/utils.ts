@@ -77,9 +77,17 @@ export function cn(...inputs: ClassValue[]) {
 // at 2 am), then subtracting that offset from noon UTC to land on local midnight.
 
 const CANCELLATION_REASON_LABELS: Record<string, string> = {
-  SICK:     "Sick",
-  OTHER:    "Other",
-  NO_SHOW:  "No Show",
+  SICK:               "Sick",
+  FAMILY_EMERGENCY:   "Family emergency",
+  TRANSPORTATION:     "Transportation",
+  VACATION:           "Vacation / travel",
+  PROVIDER_CALLOUT:   "Provider call-out",
+  WEATHER:            "Weather",
+  SCHOOL_CONFLICT:    "School conflict",
+  NO_SHOW:            "No Show",
+  REST_OF_DAY:        "Rest of day cancelled",
+  CLIENT_DEACTIVATED: "Client deactivated",
+  OTHER:              "Other",
 };
 
 // Converts stored cancellation reason values (e.g. "SICK", "NO_SHOW") to

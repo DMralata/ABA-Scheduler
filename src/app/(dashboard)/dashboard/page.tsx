@@ -17,7 +17,7 @@ import { AlertTriangle, Clock, BarChart2, XCircle } from "lucide-react";
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatDate(date: Date) {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date);
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(date);
 }
 
 function daysUntil(date: Date): number {
@@ -124,6 +124,7 @@ function buildBuckets(
     let unbillableHours = 0;
     let rbtBilledHours = 0;
     let cancellations = 0;
+    let noShows = 0;
     let supervisionHours = 0;
     let parentTrainingHours = 0;
     let assessmentHours = 0;
@@ -142,7 +143,15 @@ function buildBuckets(
     // Map: reason → { clientCount, providerCount }
     const reasonMap: Record<string, { clientCount: number; providerCount: number }> = {};
 
+    // Denominator for the cancellation rate: every session that was on the
+    // books for this bucket, whatever became of it.
+    const totalSessions = inBucket.length;
+
     for (const s of inBucket) {
+      if (s.status === "NO_SHOW") {
+        noShows++;
+        continue;
+      }
       if (s.status === "CANCELLED") {
         cancellations++;
         const reason = s.cancellationReason?.trim()
@@ -242,6 +251,8 @@ function buildBuckets(
       rbtBilledHours,
       rbtAvailableHours,
       cancellations,
+      noShows,
+      totalSessions,
       billedDirectTherapy,
       billedDirectTherapyHome,
       supervisionHours,
@@ -298,6 +309,28 @@ function buildYTDBuckets(todayStr: string): BucketDef[] {
       label:    MONTHS[mo - 1],
       startStr: `${y}-${pad(mo)}-01`,
       endStr:   `${nextY}-${pad(nextMo)}-01`,
+    });
+  }
+  return defs;
+}
+
+// Rolling 12 months: one bucket per calendar month, ending with the current month.
+// Enables month-over-month and year-over-year comparison without the January reset.
+function buildR12Buckets(todayStr: string): BucketDef[] {
+  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const [ty, tm] = todayStr.split("-").map(Number);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const defs: BucketDef[] = [];
+  for (let i = 11; i >= 0; i--) {
+    let y = ty, m = tm - i;
+    while (m < 1) { m += 12; y -= 1; }
+    let ny = y, nm = m + 1;
+    if (nm > 12) { nm = 1; ny += 1; }
+    defs.push({
+      // Disambiguate across the year boundary: "Aug ’25" vs plain "Mar"
+      label: y === ty ? MONTHS[m - 1] : `${MONTHS[m - 1]} \u2019${String(y).slice(2)}`,
+      startStr: `${y}-${pad(m)}-01`,
+      endStr: `${ny}-${pad(nm)}-01`,
     });
   }
   return defs;
@@ -417,28 +450,34 @@ export default async function DashboardPage() {
 
   const now = new Date();
   const todayStr = localDateStr(now, tz);
-  const [y] = todayStr.split("-").map(Number);
-  const yearStart = new Date(`${y}-01-01T00:00:00Z`);
+  const [y, mo] = todayStr.split("-").map(Number);
+
+  // Fetch back to the start of the rolling-12-month window (always covers YTD too).
+  const r12y = mo === 12 ? y : y - 1;
+  const r12m = mo === 12 ? 1 : mo + 1;
+  const r12StartStr = `${r12y}-${String(r12m).padStart(2, "0")}-01`;
+  const dataStart = new Date(`${r12StartStr}T00:00:00Z`);
 
   const [stats, expiringSoon, rawSessions, rbtAvailability] = await Promise.all([
     getWeeklyDashboardStats(weekStart, weekEnd),
     getExpiringSoonAuthorizations(30),
-    getDashboardSessions(yearStart),
-    getRBTAvailabilityData(yearStart),
+    getDashboardSessions(dataStart),
+    getRBTAvailabilityData(dataStart),
   ]);
 
-  const yearStartStr = `${y}-01-01`;
-  const availabilityMap = buildDailyAvailabilityMap(yearStartStr, todayStr, rbtAvailability, tz);
+  const availabilityMap = buildDailyAvailabilityMap(r12StartStr, todayStr, rbtAvailability, tz);
 
   // Build chart buckets
   const wtdDefs = buildWTDBuckets(todayStr);
   const mtdDefs = buildMTDBuckets(todayStr);
   const ytdDefs = buildYTDBuckets(todayStr);
+  const r12Defs = buildR12Buckets(todayStr);
 
   const chartData: DashboardChartData = {
     wtd: buildBuckets(rawSessions, wtdDefs, tz, availabilityMap, now),
     mtd: buildBuckets(rawSessions, mtdDefs, tz, availabilityMap, now),
     ytd: buildBuckets(rawSessions, ytdDefs, tz, availabilityMap, now),
+    r12: buildBuckets(rawSessions, r12Defs, tz, availabilityMap, now),
   };
 
   const providerSummaryData: ProviderSummaryData = {

@@ -4,7 +4,20 @@ import { prisma } from "@/lib/prisma";
 import { ClientSchema, UpdateClientSchema } from "@/lib/schemas/client";
 import type { ClientInput, UpdateClientInput } from "@/lib/schemas/client";
 import { writeAuditLog } from "@/lib/audit";
+import { requireUser } from "@/lib/auth";
 import type { DayOfWeek } from "@prisma/client";
+
+// Maps a thrown error to a user-facing message. Unique-constraint violations
+// (P2002) surface as a duplicate-ID message; everything else gets a generic
+// message so raw DB errors never crash the page.
+function toActionError(err: unknown, duplicateMessage: string): string {
+  const code = typeof err === "object" && err !== null && "code" in err
+    ? (err as { code?: unknown }).code
+    : undefined;
+  if (code === "P2002") return duplicateMessage;
+  console.error("[clients] action failed:", err);
+  return "Something went wrong saving the client. Please try again.";
+}
 
 // ─── Response Types ───────────────────────────────────────────────────────────
 
@@ -17,25 +30,36 @@ type ActionResult<T> =
 export async function createClient(
   input: ClientInput
 ): Promise<ActionResult<{ id: string }>> {
+  const auth = await requireUser();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const parsed = ClientSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0].message };
   }
+
+  const duplicateMessage = `A client with external ID ${parsed.data.externalId} already exists.`;
 
   const existing = await prisma.client.findUnique({
     where: { externalId: parsed.data.externalId },
     select: { id: true },
   });
   if (existing) {
-    return { success: false, error: `A client with external ID ${parsed.data.externalId} already exists.` };
+    return { success: false, error: duplicateMessage };
   }
 
-  const client = await prisma.client.create({
-    data: parsed.data,
-    select: { id: true },
-  });
+  let client: { id: string };
+  try {
+    client = await prisma.client.create({
+      data: parsed.data,
+      select: { id: true },
+    });
+  } catch (err) {
+    // P2002 also closes the race between the findUnique check and the insert.
+    return { success: false, error: toActionError(err, duplicateMessage) };
+  }
 
-  await writeAuditLog({ action: "CREATE", resourceType: "Client", resourceId: client.id });
+  await writeAuditLog({ action: "CREATE", resourceType: "Client", resourceId: client.id, userId: auth.userId });
 
   return { success: true, data: client };
 }
@@ -46,6 +70,9 @@ export async function updateClient(
   id: string,
   input: UpdateClientInput
 ): Promise<ActionResult<{ id: string }>> {
+  const auth = await requireUser();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const parsed = UpdateClientSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0].message };
@@ -59,13 +86,18 @@ export async function updateClient(
     return { success: false, error: "Client not found." };
   }
 
-  const client = await prisma.client.update({
-    where: { id },
-    data: parsed.data,
-    select: { id: true },
-  });
+  let client: { id: string };
+  try {
+    client = await prisma.client.update({
+      where: { id },
+      data: parsed.data,
+      select: { id: true },
+    });
+  } catch (err) {
+    return { success: false, error: toActionError(err, "Another client already uses that value.") };
+  }
 
-  await writeAuditLog({ action: "UPDATE", resourceType: "Client", resourceId: client.id });
+  await writeAuditLog({ action: "UPDATE", resourceType: "Client", resourceId: client.id, userId: auth.userId });
 
   return { success: true, data: client };
 }
@@ -77,6 +109,9 @@ export async function deactivateClient(
   id: string,
   terminationDate: Date = new Date()
 ): Promise<ActionResult<{ id: string }>> {
+  const auth = await requireUser();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const existing = await prisma.client.findUnique({
     where: { id },
     select: { id: true, terminationDate: true },
@@ -100,7 +135,12 @@ export async function deactivateClient(
         status: { in: ["SCHEDULED", "IN_PROGRESS"] },
         startTime: { gte: terminationDate },
       },
-      data: { status: "CANCELLED" },
+      // Stamp who/why so these don't pollute the dashboard as "Unknown"
+      data: {
+        status: "CANCELLED",
+        cancelledBy: "CLIENT",
+        cancellationReason: "CLIENT_DEACTIVATED",
+      },
     }),
     // Soft-delete all active provider approvals — preserves history for re-admission
     prisma.approvedHome.updateMany({
@@ -134,6 +174,9 @@ export async function assignApprovedHomeProvider(
   clientId: string,
   providerId: string
 ): Promise<ActionResult<void>> {
+  const auth = await requireUser();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const [client, provider] = await Promise.all([
     prisma.client.findUnique({ where: { id: clientId }, select: { id: true } }),
     prisma.provider.findUnique({ where: { id: providerId }, select: { id: true } }),
@@ -167,6 +210,9 @@ export async function setClientAvailability(
   dayOfWeek: DayOfWeek,
   windows: { startTime: string; endTime: string }[]
 ): Promise<ActionResult<void>> {
+  const auth = await requireUser();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const client = await prisma.client.findUnique({
     where: { id: clientId },
     select: { id: true },
@@ -230,6 +276,9 @@ const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 export async function createClientsInBulk(
   rawInputs: BulkClientInput[]
 ): Promise<ActionResult<{ successes: number; failures: { index: number; error: string }[] }>> {
+  const auth = await requireUser();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   if (rawInputs.length > 50) {
     return { success: false, error: "Cannot import more than 50 clients at once." };
   }
@@ -253,12 +302,21 @@ export async function createClientsInBulk(
       continue;
     }
 
-    const client = await prisma.client.create({
-      data: parsed.data,
-      select: { id: true },
-    });
+    let client: { id: string };
+    try {
+      client = await prisma.client.create({
+        data: parsed.data,
+        select: { id: true },
+      });
+    } catch (err) {
+      failures.push({
+        index: i,
+        error: toActionError(err, `External ID "${parsed.data.externalId}" already exists.`),
+      });
+      continue;
+    }
 
-    await writeAuditLog({ action: "CREATE", resourceType: "Client", resourceId: client.id });
+    await writeAuditLog({ action: "CREATE", resourceType: "Client", resourceId: client.id, userId: auth.userId });
 
     const avail = rawInputs[i].availability;
     if (avail && Object.keys(avail).length > 0) {
@@ -292,6 +350,9 @@ export async function removeApprovedHomeProvider(
   clientId: string,
   providerId: string
 ): Promise<ActionResult<void>> {
+  const auth = await requireUser();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const record = await prisma.approvedHome.findUnique({
     where: { clientId_providerId: { clientId, providerId } },
   });
@@ -321,6 +382,9 @@ export async function saveClientPreferredSlots(
   clientId: string,
   slots: { dayOfWeek: DayOfWeek; startTime: string }[]
 ): Promise<ActionResult<void>> {
+  const auth = await requireUser();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
   for (const s of slots) {
     if (!timeRegex.test(s.startTime)) {

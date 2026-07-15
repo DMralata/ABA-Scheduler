@@ -23,6 +23,8 @@ export type Bucket = {
   rbtBilledHours: number;
   rbtAvailableHours: number;
   cancellations: number;
+  noShows: number;
+  totalSessions: number;
   billedDirectTherapy: number;
   billedDirectTherapyHome: number;
   supervisionHours: number;
@@ -43,6 +45,7 @@ export type DashboardChartData = {
   wtd: Bucket[];
   mtd: Bucket[];
   ytd: Bucket[];
+  r12: Bucket[];
 };
 
 // ─── Chart Colors — all hex codes live here only ─────────────────────────────
@@ -51,6 +54,7 @@ const CHART_COLORS = {
   billed:            "#3b82f6", // blue
   efficiency:        "#10b981", // emerald
   cancellations:     "#ef4444", // red
+  noShows:           "#f59e0b", // amber
   unbillable:        "#94a3b8", // slate
   scheduledHours:    "#0ea5e9", // sky
   driveTime:         "#6b7280", // gray
@@ -81,7 +85,7 @@ type MetricId =
   | "scheduledHours"
   | "driveTime";
 
-type Period = "wtd" | "mtd" | "ytd";
+type Period = "wtd" | "mtd" | "ytd" | "r12";
 
 const METRICS: { id: MetricId; label: string; color: string; color2?: string }[] = [
   { id: "billed",     label: "Billed Hours",    color: CHART_COLORS.billed },
@@ -92,7 +96,7 @@ const METRICS: { id: MetricId; label: string; color: string; color2?: string }[]
   { id: "driveTime",        label: "Drive Time",         color: CHART_COLORS.driveTime },
 ];
 
-const PERIOD_LABELS: Record<Period, string> = { wtd: "WTD", mtd: "MTD", ytd: "YTD" };
+const PERIOD_LABELS: Record<Period, string> = { wtd: "WTD", mtd: "MTD", ytd: "YTD", r12: "12M" };
 
 const DATAKEY: Record<MetricId, string> = {
   billed:           "billed",
@@ -206,6 +210,16 @@ function CancellationPanel({
   const totalCount   = bucket
     ? bucket.cancellations
     : allBuckets.reduce((s, b) => s + b.cancellations, 0);
+  const noShowCount  = bucket
+    ? bucket.noShows
+    : allBuckets.reduce((s, b) => s + b.noShows, 0);
+  const totalSessions = bucket
+    ? bucket.totalSessions
+    : allBuckets.reduce((s, b) => s + b.totalSessions, 0);
+  // Rate = (cancellations + no-shows) / everything that was on the books
+  const lossRate = totalSessions > 0
+    ? (((totalCount + noShowCount) / totalSessions) * 100).toFixed(1)
+    : null;
 
   const maxClientCount   = topClients[0]?.count   ?? 1;
   const maxProviderCount = topProviders[0]?.count  ?? 1;
@@ -219,6 +233,12 @@ function CancellationPanel({
           <p className="text-xs font-semibold">
             {bucket ? bucket.label : "All periods"} &middot;{" "}
             <span className="text-red-500">{totalCount}</span> cancellation{totalCount !== 1 ? "s" : ""}
+            {noShowCount > 0 && (
+              <> &middot; <span className="text-amber-500">{noShowCount}</span> no-show{noShowCount !== 1 ? "s" : ""}</>
+            )}
+            {lossRate !== null && (
+              <span className="text-muted-foreground font-normal"> &middot; {lossRate}% of {totalSessions} scheduled</span>
+            )}
           </p>
           {!bucket && (
             <p className="text-[11px] text-muted-foreground mt-0.5">Click a bar to filter by period</p>
@@ -370,6 +390,7 @@ export function DashboardChart({ data }: { data: DashboardChartData }) {
       unbillable:      parseFloat(b.unbillableHours.toFixed(2)),
       efficiency,
       cancellations:   b.cancellations,
+      noShows:         b.noShows,
       billedDT:        parseFloat(b.billedDirectTherapy.toFixed(2)),
       billedDTH:       parseFloat(b.billedDirectTherapyHome.toFixed(2)),
       billedCompletionPct,
@@ -411,7 +432,7 @@ export function DashboardChart({ data }: { data: DashboardChartData }) {
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-foreground">Activity</h2>
         <div className="flex gap-1 bg-muted rounded-lg p-0.5">
-          {(["wtd", "mtd", "ytd"] as Period[]).map((p) => (
+          {(["wtd", "mtd", "ytd", "r12"] as Period[]).map((p) => (
             <button
               key={p}
               onClick={() => handlePeriodChange(p)}
@@ -534,14 +555,32 @@ export function DashboardChart({ data }: { data: DashboardChartData }) {
                 </>
               )}
             </>
+          ) : isCancellations ? (
+            <>
+              <Legend iconType="square" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+              <Bar
+                dataKey="cancellations"
+                name="Cancellations"
+                fill={CHART_COLORS.cancellations}
+                radius={[3, 3, 0, 0]}
+                cursor="pointer"
+                onClick={handleBarClick}
+              />
+              <Bar
+                dataKey="noShows"
+                name="No-shows"
+                fill={CHART_COLORS.noShows}
+                radius={[3, 3, 0, 0]}
+                cursor="pointer"
+                onClick={handleBarClick}
+              />
+            </>
           ) : (
             <Bar
               dataKey={DATAKEY[metric]}
               name={metricCfg.label}
               fill={metricCfg.color}
               radius={[3, 3, 0, 0]}
-              cursor={isCancellations ? "pointer" : "default"}
-              onClick={handleBarClick}
             />
           )}
         </ComposedChart>

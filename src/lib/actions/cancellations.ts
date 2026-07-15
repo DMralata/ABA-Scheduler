@@ -20,14 +20,15 @@ type ActionResult<T> =
 export async function cancelSession(
   sessionId: string,
   cancelledBy: "CLIENT" | "PROVIDER",
-  reason?: string
+  reason?: string,
+  note?: string
 ): Promise<ActionResult<{ id: string }>> {
   const auth = await requireUser();
   if (!auth.ok) return { success: false, error: auth.error };
 
   const session = await prisma.session.findUnique({
     where: { id: sessionId },
-    select: { id: true, status: true, providerId: true, startTime: true, endTime: true },
+    select: { id: true, status: true, providerId: true, startTime: true, endTime: true, notes: true },
   });
 
   if (!session) return { success: false, error: "Session not found." };
@@ -53,6 +54,11 @@ export async function cancelSession(
       billable: false,
       authorizationId: null,
       ...(cancellationType ? { sessionTypeId: cancellationType.id } : {}),
+      // Free-text detail goes into notes so it never fragments the reason
+      // categories the dashboard aggregates on.
+      ...(note?.trim()
+        ? { notes: `${session.notes ? session.notes + "\n" : ""}Cancellation note: ${note.trim()}` }
+        : {}),
     },
   });
 
@@ -90,7 +96,7 @@ export async function cancelSession(
     action: "UPDATE",
     resourceType: "Session",
     resourceId: sessionId,
-    metadata: { action: "CANCEL", cancelledBy, reason: reason ?? null },
+    metadata: { action: "CANCEL", cancelledBy, reason: reason ?? null, note: note?.trim() || null },
   });
 
   revalidatePath("/schedule");
@@ -186,7 +192,8 @@ export async function cancelRestOfDay(
     data: {
       status: "CANCELLED",
       cancelledBy: party,
-      cancellationReason: `${party === "PROVIDER" ? "Provider" : "Client"} cancelled rest of day`,
+      // Normalized reason code - keeps the dashboard reason breakdown clean.
+      cancellationReason: "REST_OF_DAY",
       billable: false,
       authorizationId: null,
       ...(cancellationType ? { sessionTypeId: cancellationType.id } : {}),

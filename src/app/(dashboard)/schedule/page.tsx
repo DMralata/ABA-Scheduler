@@ -23,6 +23,9 @@ export default async function SchedulePage() {
         availability: {
           select: { dayOfWeek: true, startTime: true, endTime: true },
         },
+        authorizations: {
+          select: { startDate: true, endDate: true },
+        },
       },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     }),

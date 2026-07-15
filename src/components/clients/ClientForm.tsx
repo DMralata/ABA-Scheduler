@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Client, ClientAvailability } from "@prisma/client";
-import { createClient, updateClient } from "@/lib/actions/clients";
+import type { Client, ClientAvailability, DayOfWeek } from "@prisma/client";
+import { createClient, updateClient, setClientAvailability } from "@/lib/actions/clients";
 import type { ClientInput, UpdateClientInput } from "@/lib/schemas/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,21 +21,69 @@ import {
 interface ClientFormProps {
   client?: Client;
   availability?: ClientAvailability[];
+  centers?: { id: string; name: string }[];
 }
+
+const NEW_CLIENT_DAYS: { key: DayOfWeek; label: string }[] = [
+  { key: "MONDAY", label: "Monday" },
+  { key: "TUESDAY", label: "Tuesday" },
+  { key: "WEDNESDAY", label: "Wednesday" },
+  { key: "THURSDAY", label: "Thursday" },
+  { key: "FRIDAY", label: "Friday" },
+  { key: "SATURDAY", label: "Saturday" },
+  { key: "SUNDAY", label: "Sunday" },
+];
+
+type NewAvailability = Partial<Record<DayOfWeek, { startTime: string; endTime: string }>>;
 
 function toDateInput(date: Date | null | undefined): string {
   if (!date) return "";
   return new Date(date).toISOString().split("T")[0];
 }
 
-export function ClientForm({ client, availability }: ClientFormProps) {
+export function ClientForm({ client, availability, centers }: ClientFormProps) {
   const router = useRouter();
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Availability entered at creation time (edit mode uses ClientAvailabilityPanel instead).
+  const [newAvailability, setNewAvailability] = useState<NewAvailability>({});
+
+  function toggleNewDay(day: DayOfWeek) {
+    setNewAvailability((prev) => {
+      const next = { ...prev };
+      if (next[day]) delete next[day];
+      else next[day] = { startTime: "08:00", endTime: "17:00" };
+      return next;
+    });
+  }
+
+  function setNewDayTime(day: DayOfWeek, field: "startTime" | "endTime", value: string) {
+    setNewAvailability((prev) => ({
+      ...prev,
+      [day]: { ...(prev[day] ?? { startTime: "", endTime: "" }), [field]: value },
+    }));
+  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+
+    // Validate availability windows entered at creation time
+    if (!client) {
+      for (const { key, label } of NEW_CLIENT_DAYS) {
+        const w = newAvailability[key];
+        if (!w) continue;
+        if (!w.startTime || !w.endTime) {
+          setError(`Availability for ${label} needs both a start and end time.`);
+          return;
+        }
+        if (w.startTime >= w.endTime) {
+          setError(`Availability for ${label}: end time must be after start time.`);
+          return;
+        }
+      }
+    }
+
     const fd = new FormData(e.currentTarget);
 
     const data = {
@@ -50,6 +98,7 @@ export function ClientForm({ client, availability }: ClientFormProps) {
       minimumRbtLevel: (() => { const v = fd.get("minimumRbtLevel") as string; return v && v !== "none" ? v : undefined; })(),
       activeDate: fd.get("activeDate") as string,
       terminationDate: (fd.get("terminationDate") as string) || undefined,
+      centerId: (() => { const v = fd.get("centerId") as string; return v && v !== "none" ? v : undefined; })(),
       insurance: fd.get("insurance") as string,
       street: (fd.get("street") as string) || undefined,
       city: (fd.get("city") as string) || undefined,
@@ -70,11 +119,26 @@ export function ClientForm({ client, availability }: ClientFormProps) {
       : createClient(data as unknown as ClientInput);
 
     action
-      .then((result) => {
+      .then(async (result) => {
         if (!result.success) {
           setError(result.error);
           setIsPending(false);
           return;
+        }
+        // Save availability windows entered on the create form so the client
+        // is schedulable immediately - no second trip through Edit needed.
+        if (!client) {
+          const entries = Object.entries(newAvailability) as [DayOfWeek, { startTime: string; endTime: string }][];
+          for (const [day, w] of entries) {
+            const availResult = await setClientAvailability(result.data.id, day, [w]);
+            if (!availResult.success) {
+              // Client was created - send the user to the record with a clear message
+              // rather than leaving them stuck on the form.
+              router.push(`/clients/${result.data.id}?availabilityError=1`);
+              router.refresh();
+              return;
+            }
+          }
         }
         router.push(`/clients/${result.data.id}`);
         router.refresh();
@@ -193,6 +257,23 @@ export function ClientForm({ client, availability }: ClientFormProps) {
                 </SelectContent>
               </Select>
             </div>
+            {centers && centers.length > 0 && (
+              <div className="space-y-1.5">
+                <Label htmlFor="centerId">Center</Label>
+                <Select name="centerId" defaultValue={client?.centerId ?? "none"}>
+                  <SelectTrigger id="centerId"><SelectValue placeholder="No center" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No center</SelectItem>
+                    {centers.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Sets the timezone and drive-time origin for scheduling.
+                </p>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="defaultSessionHours">Session Length (hours)</Label>
               <Input
@@ -266,6 +347,54 @@ export function ClientForm({ client, availability }: ClientFormProps) {
           clientId={client.id}
           availability={availability}
         />
+      )}
+
+      {/* Availability at creation — without windows the client cannot be scheduled */}
+      {!client && (
+        <div className="bg-card rounded-xl border border-border p-5 space-y-4">
+          <div>
+            <h2 className="text-sm font-semibold">Availability</h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Check the days this client can attend. Without availability, the scheduler
+              can&apos;t book or propose sessions for them.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-x-8 gap-y-2">
+            {NEW_CLIENT_DAYS.map(({ key, label }) => {
+              const w = newAvailability[key];
+              return (
+                <div key={key} className="flex items-center gap-3 h-9">
+                  <label className="flex items-center gap-2 w-28 shrink-0 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!!w}
+                      onChange={() => toggleNewDay(key)}
+                      className="h-4 w-4 rounded border-input"
+                    />
+                    {label}
+                  </label>
+                  {w && (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="time"
+                        value={w.startTime}
+                        onChange={(e) => setNewDayTime(key, "startTime", e.target.value)}
+                        className="h-8 w-28"
+                      />
+                      <span className="text-xs text-muted-foreground">to</span>
+                      <Input
+                        type="time"
+                        value={w.endTime}
+                        onChange={(e) => setNewDayTime(key, "endTime", e.target.value)}
+                        className="h-8 w-28"
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       <div className="flex items-center gap-3">

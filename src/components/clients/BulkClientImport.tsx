@@ -197,6 +197,8 @@ const COLUMNS: Column[] = [
       <select className={selectClass()} value={value} onChange={(e) => onChange(e.target.value)} onPaste={onPaste}>
         <option value="CENTER">Center</option>
         <option value="HOME">Home</option>
+        <option value="HYBRID">Hybrid</option>
+        <option value="SCHOOL">School</option>
       </select>
     ),
   },
@@ -657,10 +659,21 @@ export function BulkClientImport({ open, onClose }: BulkClientImportProps) {
       availability: rowAvailability[i] || {},
     }));
 
-    const res = await createClientsInBulk(inputs);
+    let res: Awaited<ReturnType<typeof createClientsInBulk>>;
+    try {
+      res = await createClientsInBulk(inputs);
+    } catch {
+      setSubmitting(false);
+      setImportNotice("Import failed - please try again.");
+      return;
+    }
     setSubmitting(false);
 
-    if (!res.success) return;
+    if (!res.success) {
+      // Top-level failure (auth, row cap, ...) - show it instead of silently returning
+      setImportNotice(res.error);
+      return;
+    }
 
     setImportResult(res.data);
 
@@ -668,6 +681,12 @@ export function BulkClientImport({ open, onClose }: BulkClientImportProps) {
       router.refresh();
       handleClose();
       return;
+    }
+
+    // Some rows imported - refresh the list so successes show up immediately,
+    // and keep the dialog open so the failed rows can be corrected.
+    if (res.data.successes > 0) {
+      router.refresh();
     }
 
     const serverErrors: Record<number, RowErrors> = {};

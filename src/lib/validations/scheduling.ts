@@ -279,6 +279,27 @@ export function validateClientNotTerminated(
   return { valid: true };
 }
 
+// ─── Rule 10b: Client Active ─────────────────────────────────────────────────
+// Prevents scheduling sessions before the client's active (intake) date.
+// activeDate is a date-only value stored as UTC midnight, so compare on the
+// UTC date string (same approach as authorization date coverage).
+
+export function validateClientActive(
+  client: Pick<Client, "activeDate">,
+  sessionStart: Date,
+  timezone: string
+): ValidationResult {
+  const sessionDay = toLocalDateString(sessionStart, timezone);
+  const activeDay = client.activeDate.toISOString().split("T")[0];
+  if (sessionDay < activeDay) {
+    return {
+      valid: false,
+      reason: `Client's active date is ${activeDay} — sessions cannot be scheduled before then.`,
+    };
+  }
+  return { valid: true };
+}
+
 // ─── Rule 11: Authorization ───────────────────────────────────────────────────
 // Billable sessions must have an active authorization covering the session date
 // and service code, and must not exceed the authorization's weekly hour limit.
@@ -455,6 +476,7 @@ export async function validateSession(params: {
   const syncResults: ValidationResult[] = [
     validateSessionTime(startTime, endTime),
     validateClientNotTerminated(client, startTime, timezone),
+    validateClientActive(client, startTime, timezone),
     validateClientAvailability(startTime, endTime, client.availability, timezone),
     approvedProviderResult,
     overlapResult,

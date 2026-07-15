@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 import { getClientById } from "@/lib/queries/clients";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ClientForm } from "@/components/clients/ClientForm";
@@ -10,7 +11,10 @@ interface EditClientPageProps {
 
 export default async function EditClientPage({ params }: EditClientPageProps) {
   const { id } = await params;
-  const client = await getClientById(id);
+  const [client, centers] = await Promise.all([
+    getClientById(id),
+    prisma.center.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+  ]);
 
   if (!client) notFound();
 
@@ -20,7 +24,7 @@ export default async function EditClientPage({ params }: EditClientPageProps) {
         title={`Edit — ${client.firstName} ${client.lastName}`}
         description="Update client details."
       />
-      <ClientForm client={client} availability={client.availability} />
+      <ClientForm client={client} availability={client.availability} centers={centers} />
     </div>
   );
 }

@@ -27,10 +27,13 @@ function clientStatus(client: Client): StatusInfo {
 }
 
 function formatDOB(date: Date): string {
+  // Date-only fields are stored as UTC midnight - format in UTC to avoid
+  // showing the previous day in US timezones.
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "UTC",
   }).format(date);
 }
 

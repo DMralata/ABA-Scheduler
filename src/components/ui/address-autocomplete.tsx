@@ -145,6 +145,10 @@ export function AddressAutocomplete({
           defaultValue={defaultStreet ?? ""}
           placeholder="Start typing an address…"
           autoComplete="off"
+          // Enter is used to pick a Places suggestion - never submit the form from here.
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.preventDefault();
+          }}
         />
       </div>
       <div className="grid grid-cols-3 gap-4">

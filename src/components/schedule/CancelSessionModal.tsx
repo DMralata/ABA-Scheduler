@@ -27,6 +27,19 @@ export interface CancelTarget {
   viewContext?: "CLIENT" | "PROVIDER" | null; // which entity row was clicked
 }
 
+// Reason taxonomy - values are stored on the session and aggregated by the
+// dashboard, so they must stay stable codes (labels can change freely).
+const CANCEL_REASONS: { value: string; label: string }[] = [
+  { value: "SICK",             label: "Sick" },
+  { value: "FAMILY_EMERGENCY", label: "Family emergency" },
+  { value: "TRANSPORTATION",   label: "Transportation" },
+  { value: "VACATION",         label: "Vacation / travel" },
+  { value: "PROVIDER_CALLOUT", label: "Provider call-out" },
+  { value: "WEATHER",          label: "Weather" },
+  { value: "SCHOOL_CONFLICT",  label: "School conflict" },
+  { value: "OTHER",            label: "Other" },
+];
+
 interface CancelSessionModalProps {
   target: CancelTarget;
   onClose: () => void;
@@ -37,7 +50,8 @@ interface CancelSessionModalProps {
 
 export function CancelSessionModal({ target, onClose, onCancelled, onRemoved, onRestored }: CancelSessionModalProps) {
   const [cancelledBy, setCancelledBy] = useState<"CLIENT" | "PROVIDER" | "">(target.viewContext ?? "");
-  const [reason, setReason] = useState<"SICK" | "OTHER" | "">("");
+  const [reason, setReason] = useState<string>("");
+  const [note, setNote] = useState("");
   const [isPending, setIsPending] = useState(false);
   const [isCancelDayPending, setIsCancelDayPending] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
@@ -65,7 +79,7 @@ export function CancelSessionModal({ target, onClose, onCancelled, onRemoved, on
     if (!reason) { setError("Select a cancellation reason."); return; }
     setError(null);
     setIsPending(true);
-    cancelSession(target.sessionId, cancelledBy as "CLIENT" | "PROVIDER", reason).then((result) => {
+    cancelSession(target.sessionId, cancelledBy as "CLIENT" | "PROVIDER", reason, note).then((result) => {
       setIsPending(false);
       if (!result.success) {
         setError(result.error);
@@ -265,18 +279,10 @@ export function CancelSessionModal({ target, onClose, onCancelled, onRemoved, on
               {/* Cancelled by */}
               <div className="space-y-1.5">
                 <Label>Cancelled by</Label>
-                {target.viewContext ? (
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      disabled
-                      className="flex-1 py-2 rounded-md border text-xs font-medium border-primary bg-primary/10 text-primary"
-                    >
-                      {target.viewContext === "CLIENT" ? "Client" : "Provider"}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex gap-2">
+                {/* viewContext only pre-selects - both options stay clickable so a
+                    session opened from a client row can still be marked as a
+                    provider cancellation (and vice versa). */}
+                <div className="flex gap-2">
                     {(["CLIENT", "PROVIDER"] as const).map((val) => (
                       <button
                         key={val}
@@ -291,24 +297,37 @@ export function CancelSessionModal({ target, onClose, onCancelled, onRemoved, on
                         {val === "CLIENT" ? "Client" : "Provider"}
                       </button>
                     ))}
-                  </div>
-                )}
+                </div>
               </div>
 
               {/* Reason */}
               <div className="space-y-1.5">
                 <Label>Reason</Label>
-                <Select value={reason} onValueChange={(v) => setReason(v as "SICK" | "OTHER")}>
+                <Select value={reason} onValueChange={(v) => setReason((v as string) ?? "")}>
                   <SelectTrigger>
                     <span className={reason ? "" : "text-muted-foreground"}>
-                      {reason === "SICK" ? "Sick" : reason === "OTHER" ? "Other" : "Select reason…"}
+                      {CANCEL_REASONS.find((r) => r.value === reason)?.label ?? "Select reason…"}
                     </span>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="SICK">Sick</SelectItem>
-                    <SelectItem value="OTHER">Other</SelectItem>
+                    {CANCEL_REASONS.map((r) => (
+                      <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Optional note - stored on the session, not in the reason category */}
+              <div className="space-y-1.5">
+                <Label>Note <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  rows={2}
+                  maxLength={500}
+                  placeholder="Any detail worth keeping (e.g. flu, car trouble)…"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+                />
               </div>
 
               <div className="flex items-center gap-3 pt-1">

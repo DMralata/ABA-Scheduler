@@ -23,6 +23,7 @@ interface WorkspaceClient {
   id: string; firstName: string; lastName: string;
   street: string | null; city: string | null; state: string | null; zip: string | null;
   availability: { dayOfWeek: string; startTime: string; endTime: string }[];
+  authorizations: { startDate: Date; endDate: Date }[];
 }
 interface WorkspaceProvider {
   id: string; firstName: string; lastName: string; position: string;
