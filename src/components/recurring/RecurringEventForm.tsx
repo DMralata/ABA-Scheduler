@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { navigateAfterSave } from "@/lib/navigateAfterSave";
 
 const DAYS: { value: DayOfWeek; label: string; short: string }[] = [
   { value: "MONDAY",    label: "Monday",    short: "Mon" },
@@ -125,8 +126,7 @@ export function RecurringEventForm({ sessionTypes, providers, centerId, timezone
       if (!result.success) {
         setError(result.error);
       } else {
-        router.push("/recurring");
-        router.refresh();
+        navigateAfterSave("/recurring");
       }
     } finally {
       setLoading(false);
