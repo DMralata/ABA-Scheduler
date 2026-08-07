@@ -10,6 +10,7 @@ import { ApprovedProvidersPanel } from "@/components/clients/ApprovedProvidersPa
 import { AuthorizationsPanel } from "@/components/clients/AuthorizationsPanel";
 import { ClientAvailabilityPanel } from "@/components/clients/ClientAvailabilityPanel";
 import { ClientPreferredSlotsPanel } from "@/components/clients/ClientPreferredSlotsPanel";
+import { DischargeClientButton } from "@/components/clients/DischargeClientButton";
 import { Badge, Card, Chip } from "@/components/ui-ata";
 
 interface ClientProfilePageProps {
@@ -114,6 +115,15 @@ export default async function ClientProfilePage({ params }: ClientProfilePagePro
     getWeeklyHoursMap(authIds, weekStart, weekEnd),
   ]);
 
+  // Shown in the discharge confirmation so the user knows exactly what gets cancelled.
+  const upcomingSessionCount = await prisma.session.count({
+    where: {
+      clientId: id,
+      status: { in: ["SCHEDULED", "IN_PROGRESS"] },
+      startTime: { gte: new Date() },
+    },
+  });
+
   const status = clientStatus(client);
   const isActive = status.label === "Active" || status.label === "Intake";
   const initials = `${client.firstName[0] ?? ""}${client.lastName[0] ?? ""}`.toUpperCase();
@@ -204,6 +214,13 @@ export default async function ClientProfilePage({ params }: ClientProfilePagePro
             <Pencil size={16} />
             Edit
           </Link>
+          {isActive && (
+            <DischargeClientButton
+              clientId={id}
+              clientName={`${client.firstName} ${client.lastName}`}
+              upcomingSessionCount={upcomingSessionCount}
+            />
+          )}
         </div>
       </header>
 
