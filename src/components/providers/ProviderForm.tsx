@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
+import { navigateAfterSave, guardAgainstStuckSave } from "@/lib/navigateAfterSave";
 import {
   Select,
   SelectContent,
@@ -55,6 +56,10 @@ export function ProviderForm({ provider }: ProviderFormProps) {
     };
 
     setIsPending(true);
+    const stuck = guardAgainstStuckSave(() => {
+      setIsPending(false);
+      setError("Saved, but the page didn't navigate (server was slow). Check the Providers list — the record was most likely saved.");
+    });
     const action = provider
       ? updateProvider(provider.id, data)
       : createProvider(data);
@@ -63,13 +68,14 @@ export function ProviderForm({ provider }: ProviderFormProps) {
       .then((result) => {
         if (!result.success) {
           setError(result.error);
+          stuck.clear();
           setIsPending(false);
           return;
         }
-        router.push(`/providers/${result.data.id}`);
-        router.refresh();
+        navigateAfterSave(`/providers/${result.data.id}`);
       })
       .catch((err) => {
+        stuck.clear();
         setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
         setIsPending(false);
       });
