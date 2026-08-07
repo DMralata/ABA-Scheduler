@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { CalendarDays, MessageCircle, Pencil } from "lucide-react";
+import { prisma } from "@/lib/prisma";
 import { getProviderById } from "@/lib/queries/providers";
 import { ProviderAvailabilityPanel } from "@/components/providers/ProviderAvailabilityPanel";
 import { ApprovedClientsPanel } from "@/components/providers/ApprovedClientsPanel";
+import { DeactivateProviderButton } from "@/components/providers/DeactivateProviderButton";
 import { Badge, Card, Chip } from "@/components/ui-ata";
 
 interface ProviderProfilePageProps {
@@ -59,6 +61,18 @@ export default async function ProviderProfilePage({ params }: ProviderProfilePag
   const provider = await getProviderById(id);
 
   if (!provider) notFound();
+
+  // Counts shown in the deactivate confirmation so the user sees the impact first.
+  const [upcomingSessionCount, approvedClientCount] = await Promise.all([
+    prisma.session.count({
+      where: {
+        providerId: id,
+        status: { in: ["SCHEDULED", "IN_PROGRESS"] },
+        startTime: { gte: new Date() },
+      },
+    }),
+    prisma.approvedHome.count({ where: { providerId: id, endDate: null } }),
+  ]);
 
   const initials = `${provider.firstName[0] ?? ""}${provider.lastName[0] ?? ""}`.toUpperCase();
   const statusLabel = STATUS_LABELS[provider.status] ?? provider.status;
@@ -139,6 +153,14 @@ export default async function ProviderProfilePage({ params }: ProviderProfilePag
             <Pencil size={16} />
             Edit
           </Link>
+          {provider.status === "ACTIVE" && (
+            <DeactivateProviderButton
+              providerId={id}
+              providerName={`${provider.firstName} ${provider.lastName}`}
+              upcomingSessionCount={upcomingSessionCount}
+              approvedClientCount={approvedClientCount}
+            />
+          )}
         </div>
       </header>
 
