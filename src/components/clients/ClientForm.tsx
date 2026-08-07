@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import { ClientAvailabilityPanel } from "@/components/clients/ClientAvailabilityPanel";
+import { navigateAfterSave, guardAgainstStuckSave } from "@/lib/navigateAfterSave";
 import {
   Select,
   SelectContent,
@@ -114,6 +115,13 @@ export function ClientForm({ client, availability, centers }: ClientFormProps) {
     };
 
     setIsPending(true);
+    // Failsafe: never leave the button stuck on "Saving..." indefinitely.
+    const stuck = guardAgainstStuckSave(() => {
+      setIsPending(false);
+      setError("Saved, but the page didn't navigate (server was slow to respond). Check the Clients list — the record was most likely created.");
+    });
+    const clearStuck = () => stuck.clear();
+
     const action = client
       ? updateClient(client.id, data as unknown as UpdateClientInput)
       : createClient(data as unknown as ClientInput);
@@ -121,6 +129,7 @@ export function ClientForm({ client, availability, centers }: ClientFormProps) {
     action
       .then(async (result) => {
         if (!result.success) {
+          clearStuck();
           setError(result.error);
           setIsPending(false);
           return;
@@ -134,16 +143,15 @@ export function ClientForm({ client, availability, centers }: ClientFormProps) {
             if (!availResult.success) {
               // Client was created - send the user to the record with a clear message
               // rather than leaving them stuck on the form.
-              router.push(`/clients/${result.data.id}?availabilityError=1`);
-              router.refresh();
+              navigateAfterSave(`/clients/${result.data.id}?availabilityError=1`);
               return;
             }
           }
         }
-        router.push(`/clients/${result.data.id}`);
-        router.refresh();
+        navigateAfterSave(`/clients/${result.data.id}`);
       })
       .catch((err) => {
+        clearStuck();
         setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
         setIsPending(false);
       });

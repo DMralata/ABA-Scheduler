@@ -8,6 +8,7 @@ import type { AuthorizationInput, UpdateAuthorizationInput } from "@/lib/schemas
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { navigateAfterSave } from "@/lib/navigateAfterSave";
 
 interface AuthorizationFormProps {
   clientId: string;
@@ -51,8 +52,7 @@ export function AuthorizationForm({ clientId, authorization }: AuthorizationForm
         setError(result.error);
         return;
       }
-      router.push(`/clients/${clientId}`);
-      router.refresh();
+      navigateAfterSave(`/clients/${clientId}`);
     });
   }
 
