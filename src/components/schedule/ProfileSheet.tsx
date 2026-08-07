@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { locationLabel } from "@/lib/locationLabels";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -119,7 +120,7 @@ function ClientContent({ c }: { c: ClientSummary }) {
         {c.insurance            && <Row label="Insurance"         value={c.insurance} />}
         <Row label="Spanish"           value={c.spanish ? "Yes" : "No"} />
         <Row label="Female Provider Only" value={c.femaleProviderOnly ? "Yes" : "No"} />
-        <Row label="Preferred Location"   value={c.preferredLocation === "HOME" ? "Home" : "Center"} />
+        <Row label="Preferred Location"   value={locationLabel(c.preferredLocation)} />
         {c.minimumRbtLevel      && <Row label="Min. RBT Level"    value={`Level ${c.minimumRbtLevel}`} />}
         {c.activeDate           && <Row label="Active Since"      value={fmtDate(c.activeDate)} />}
         {label === "Discharged" && c.terminationDate && (
