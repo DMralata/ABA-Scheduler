@@ -12,6 +12,7 @@ import { ClientAvailabilityPanel } from "@/components/clients/ClientAvailability
 import { ClientPreferredSlotsPanel } from "@/components/clients/ClientPreferredSlotsPanel";
 import { DischargeClientButton } from "@/components/clients/DischargeClientButton";
 import { Badge, Card, Chip } from "@/components/ui-ata";
+import { locationLabel } from "@/lib/locationLabels";
 
 interface ClientProfilePageProps {
   params: Promise<{ id: string }>;
@@ -245,7 +246,7 @@ export default async function ClientProfilePage({ params }: ClientProfilePagePro
             />
             <InfoRow
               label="Preferred location"
-              value={client.preferredLocation === "HOME" ? "Home" : "Center"}
+              value={locationLabel(client.preferredLocation)}
             />
             {client.minimumRbtLevel && (
               <InfoRow label="Min. RBT level" value={`Level ${client.minimumRbtLevel}`} />
