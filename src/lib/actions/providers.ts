@@ -170,15 +170,24 @@ export async function deactivateProvider(id: string): Promise<ActionResult<void>
       where: { id },
       data: { status: "INACTIVE" },
     }),
-    // Cancel all future scheduled or in-progress sessions for this provider
+    // Cancel all future scheduled or in-progress sessions for this provider.
+    // Stamped with who/why so these don't land in the dashboard as unattributed
+    // cancellations (matches cancelSession / client deactivation).
     prisma.session.updateMany({
       where: {
         providerId: id,
         status: { in: ["SCHEDULED", "IN_PROGRESS"] },
         startTime: { gte: now },
       },
-      data: { status: "CANCELLED" },
+      data: {
+        status: "CANCELLED",
+        cancelledBy: "PROVIDER",
+        cancellationReason: "PROVIDER_DEACTIVATED",
+      },
     }),
+    // Detach from recurring events so a later regeneration can't create fresh
+    // future sessions for someone who is no longer on staff.
+    prisma.recurringEventProvider.deleteMany({ where: { providerId: id } }),
     // Soft-delete all active client approvals — preserves history if provider returns
     prisma.approvedHome.updateMany({
       where: { providerId: id, endDate: null },
