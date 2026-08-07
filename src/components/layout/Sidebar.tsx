@@ -108,6 +108,11 @@ export function Sidebar({
             <Link
               key={item.href}
               href={item.href}
+              // Next.js prefetches every visible Link by default. With 8 nav items
+              // that fires 8 concurrent RSC requests on each page load; on cold
+              // serverless functions some come back 503, which is what made
+              // navigation (and post-save redirects) fail intermittently.
+              prefetch={false}
               className={`ata-nav-item ${active ? "ata-nav-item--active" : ""}`}
               aria-current={active ? "page" : undefined}
               aria-label={compact ? item.label : undefined}
@@ -157,6 +162,7 @@ export function Sidebar({
       <div className="ata-sidebar-footer">
         <Link
           href="/settings"
+          prefetch={false}
           className={`ata-nav-item ${pathname === "/settings" ? "ata-nav-item--active" : ""}`}
           aria-label={compact ? "Settings" : undefined}
           title={compact ? "Settings" : undefined}
@@ -167,6 +173,7 @@ export function Sidebar({
 
         <Link
           href="/help"
+          prefetch={false}
           className={`ata-nav-item ${pathname === "/help" || pathname.startsWith("/help/") ? "ata-nav-item--active" : ""}`}
           aria-label={compact ? "Help" : undefined}
           title={compact ? "Help" : undefined}
